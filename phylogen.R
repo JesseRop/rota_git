@@ -27,6 +27,7 @@ library(ggtree)
 library(treeio)
 library(phangorn)
 library(ape)
+library(labelled)
 
 
 #clear environment
@@ -36,9 +37,9 @@ setwd("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JR
 
 #-------------------------------------------------------------------------------------------------------------
 
-detectCores()
-cl <-makeCluster(4, type = "SOCK")
-registerDoSNOW(cl)
+# detectCores()
+# cl <-makeCluster(4, type = "SOCK")
+# registerDoSNOW(cl)
 #-------------------------------------------------------------------------------------------------------------
 #function for checking whether all bases are identical per locus
 #load functions
@@ -58,7 +59,7 @@ fastaIN_seqs <- fastaIN[,tstrsplit(V3, "")]  #require data.table
 fastaIN_names <- fastaIN[,.(V1)]
 
 #bind the two datasets
-fastaIN <- cbind(fastaIN_names, fastaIN_seqs)
+fastaIN <- base::cbind(fastaIN_names, fastaIN_seqs)
 
 #remame column 1 as it matches column 2
 names(fastaIN)[1] <- c("V0")
@@ -76,7 +77,7 @@ fastaIN_v1 <- as.data.frame(fastaIN[1])
 #keep only columns that represent haplotypes (those that dont match)
 for(colN in 2:dim(fastaIN)[2]) {
   if(all_identical(fastaIN[,colN]) == F) {
-    fastaIN_v1 <- as.data.frame(cbind(fastaIN_v1, fastaIN[colN]))
+    fastaIN_v1 <- as.data.frame(base::cbind(fastaIN_v1, fastaIN[colN]))
   }
 }
 
@@ -88,18 +89,48 @@ gtype_object_all <- makeGenotypes(gtype_object_all)
 lapply(gtype_object_all[,-1], function(x)HWE.exact(unlist(x)))
 
 ##Plotting LD for all the fut2 markers
-LDplot(genetics::LD(gtype_object_all))
-LDtable(genetics::LD(gtype_object_all))
+genetics::LDplot(genetics::LD(gtype_object_all))
+genetics::LDtable(genetics::LD(gtype_object_all))
 
 #Generating a table of the allele frequencies, hwe and ld to rs601338 for all the fut2 markers
-fut2_allele_freqs = bind_rows(lapply(gtype_object_all[,-1], function(x) c(summary(x)$allele.names, summary(x)$allele.freq[c(3,4)]))) %>% t() %>% `colnames<-`(c("major_allele", "minor_allele", "major_af", "minor_af")) %>% as.data.frame()%>% rownames_to_column(var = "cds_pos") %>% mutate_at(vars(cds_pos), ~str_remove(.,"V"))
+fut2_allele_freqs = bind_rows(lapply(gtype_object_all[,-1], function(x) c(summary(x)$allele.names, summary(x)$allele.freq[c(3,4)]))) %>% 
+  t() %>% 
+  `colnames<-`(c("major_allele", "minor_allele", "major_af", "minor_af")) %>% 
+  as.data.frame()%>% 
+  rownames_to_column(var = "cds_pos") %>% 
+  mutate_at(vars(cds_pos), ~str_remove(.,"V"))
+
 fut2_hwe = bind_rows(lapply(gtype_object_all[,-1], function(x) HWE.exact(x)[3]), .id = "cds_pos")
 fut2_ld_to_rs601338 = bind_rows(lapply(gtype_object_all[,-1], function(x) genetics::LD(gtype_object_all[,"V461"],x)[2:8]), .id = "cds_pos")
 
 ##########################Phylo###########################
 kbc_metadata = read_csv("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/R processed tables/sequenced_ethnicities.csv", na = c("", "<NA>", "NA"))
 
-kbc_fut2_set <-  fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/sequencing results/fut2 phylip from clc/KBC_FUT2_CDS_Consensus_alignment_QCd.phy", skip =1, header = F, blank.lines.skip = T) %>% dplyr::select(V1, V3) %>% rename(V1 = "serial", V3 = "fut2") %>% tibble::deframe()  %>% DNAStringSet()
+##Display flextable for KBC participants
+sequencing_participants_dg = kbc_metadata %>% 
+  mutate(sex = case_when(sex == "M" ~ "Male", sex == "F" ~ "Female")) %>% 
+  mutate_at(vars(ethnicity_grouped), str_to_sentence) %>% 
+  dplyr::select(ethnicity_grouped, sex) %>%
+  set_variable_labels(ethnicity_grouped = "Ethnicity", sex = "Sex") %>%
+  tbl_summary(., missing = "ifany") %>% 
+  gtsummary::as_flextable() %>% 
+  padding(padding=0) %>% 
+  set_table_properties(layout = "autofit") %>% 
+  flextable::fontsize(size = 8, part = "all") %>%
+  flextable::border(i = ~ label %in% c("Ethnicity", "Sex"), border.top = fp_border(color="gray70", width = 1), part = "body") %>%
+  bold(i = ~ label %in% c("Ethnicity", "Sex"), j=1, bold = TRUE, part = "body")) %>%
+  bold(bold = TRUE, part = "header")
+                    
+
+##Transferring display table to word
+read_docx() %>%  
+  body_add_par(value = "Table 1: FUT2 sequencing participants", style = "heading 2") %>% 
+  body_add_flextable(sequencing_participants_dg) %>%  
+  body_add_par(value = "Demographics of individuals included in FUT2 sequencing. In ethnicity, Other includes in Digo, Taita, Kamba, Luo, Arab, Ajuran, Bajun, Luhya, Kikuyu and Rabai", style = "Table Caption") %>% 
+  body_end_section_continuous() %>% 
+  print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx")
+
+kbc_fut2_set <-  fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/sequencing results/fut2 phylip from clc/KBC_FUT2_CDS_Consensus_alignment_QCd.phy", skip =1, header = F, blank.lines.skip = T) %>% dplyr::select(V1, V3) %>% dplyr::rename(V1 = "serial", V3 = "fut2") %>% tibble::deframe()  %>% DNAStringSet()
 kbc_fut2_aln  = msa(kbc_fut2_set)
 # msaPrettyPrint(p_aln, y=c(164, 213), output="asis",showNames="none", showLogo="none", askForOverwrite=FALSE)
 # kbc_fut2_aln_sir <- msaConvert(kbc_fut2_aln, type="seqinr::alignment")
@@ -145,18 +176,81 @@ kbc_fut2_ggtree_annot + geom_tippoint(aes(color=ethnicity_grouped)) + geom_facet
 
 ##########################Annotation###########################
 
+##NCBI cds snps
 fut2_cds_snps = fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_cds_vcf", header = T) ##%>% mutate(rsid = str_extract(INFO, "rs.+(?=;.+)"))
-fut2_erythrogene = read_csv("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_functional_erythrogene.csv")%>% mutate(allele_cds1 = str_extract_all(`Nucleotide Change`, "[0-9]+", simplify = T)[,1], allele_cds2 = str_extract_all(`Nucleotide Change`, "[0-9]+", simplify = T)[,2], allele_cds3 = str_extract_all(`Nucleotide Change`, "[0-9]+", simplify = T)[,3] ) %>%   mutate_if(is.character, list(~na_if(., ""))) %>% pivot_longer(c(allele_cds1, allele_cds2, allele_cds3), names_to = "cds_in_allele", values_to = "pos", values_drop_na = T) ## %>% mutate(dup = duplicated(pos)) %>% pivot_wider(., id_cols = pos, names_from = dup, values_from = `Nucleotide Change`)
-## removing duplicates
-fut2_erythrogene = fut2_erythrogene %>% distinct(., pos, .keep_all = T)
-# read_csv("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_functional_erythrogene.csv")%>% mutate(allele_cds = str_extract_all(`Nucleotide Change`, "[0-9]+(?=[A-Z]>[A-Z])", simplify = T))
 
+##Erythrogene alleles
+fut2_erythrogene = read_csv("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_functional_erythrogene.csv")%>% 
+  mutate(allele_cds1 = str_extract_all(`Nucleotide Change`, "[0-9]+", simplify = T)[,1], allele_cds2 = str_extract_all(`Nucleotide Change`, "[0-9]+", simplify = T)[,2], allele_cds3 = str_extract_all(`Nucleotide Change`, "[0-9]+", simplify = T)[,3] ) %>%   
+  mutate_if(is.character, list(~na_if(., ""))) %>% pivot_longer(c(allele_cds1, allele_cds2, allele_cds3), names_to = "cds_in_allele", values_to = "pos", values_drop_na = T) ## %>% 
+# mutate(dup = duplicated(pos)) %>% pivot_wider(., id_cols = pos, names_from = dup, values_from = `Nucleotide Change`)
 
-fut2_1kg = fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_snps_af__1kgg.txt", header = T, skip = 256) %>% mutate_at(vars("global", "ACB", "ASW", "BEB", "CDX", "CEU", "CHB", "CHS", "CLM", "ESN", "FIN", "GBR", "GIH", "GWD", "IBS", "ITU",  "JPT", "KHV", "LWK", "MSL", "MXL", "PEL", "PJL", "PUR", "STU", "TSI", "YRI"), ~as.numeric(str_split(., ":", n=3, simplify = T)[,2])/as.numeric(str_split(., ":", n=3, simplify = T)[,1])) %>% separate(INFO, into = c("AA", "AC", "AF", "AFR_AF", "AMR_AF", "AN", "DP", "EAS_AF", "EUR_AF", "EX_TARGET", "NS", "SAS_AF", "SF", "VT"), sep =  ";") %>% dplyr::select(c("ID", "REF", "ALT", "AF", "AFR_AF", "AMR_AF", "EAS_AF", "EUR_AF", "SAS_AF", "global", "ACB", "ASW", "ESN", "GWD", "LWK", "MSL", "YRI"))
-fut2_ensemble_snps = fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_snps_ensembl.txt", header = T) %>% distinct(`#Uploaded_variation`, .keep_all=T) %>% dplyr::select("#Uploaded_variation", "Allele", "Consequence", "IMPACT","Protein_position", "Amino_acids", "SIFT", "PolyPhen", "AF", "CLIN_SIG")
+## removing duplicates from erythrogene
+fut2_erythrogene = fut2_erythrogene %>% 
+  distinct(., pos, .keep_all = T)
 
-kbc_cds_pos = t(snp_t) %>% as.data.frame() %>% rownames_to_column(var = "cds_pos") %>%  mutate_at(vars(cds_pos), ~str_remove(.,"V")) %>% mutate(chr_pos = as.numeric(cds_pos)+48702956) %>% dplyr::select(cds_pos,chr_pos) %>% right_join(fut2_allele_freqs,., by = "cds_pos") %>% right_join(fut2_erythrogene,., by=c("pos" = "cds_pos")) %>% right_join(fut2_cds_snps,., by=c("POS"="chr_pos")) %>% right_join(fut2_1kg,., by = "ID") %>% right_join(fut2_ensemble_snps,., by = (c("#Uploaded_variation" = "ID"))) %>% dplyr::select(c("#Uploaded_variation","Allele.y", "REF.x", "ALT.x", "major_allele", "minor_allele", "Nucleotide Change", "Predicted Amino Acid Change", "1000G", "cds_in_allele", "pos",  "Consequence", "IMPACT", "Protein_position", "Amino_acids", "SIFT", "PolyPhen", "AFR_AF", "AMR_AF", "EAS_AF", "EUR_AF", "SAS_AF", "global", "major_af", "minor_af", "ACB", "ASW", "ESN", "GWD", "LWK", "MSL", "YRI")) 
-kbc_cds_pos_summ = kbc_cds_pos %>% dplyr::select(c("#Uploaded_variation", "REF.x", "ALT.x", "major_allele", "minor_allele","Allele.y", "Nucleotide Change", "cds_in_allele", "pos",  "Consequence", "Amino_acids", "SIFT", "PolyPhen", "AFR_AF", "global", "major_af", "minor_af", "LWK"))
+##fut2 1kg genotypes and allele frequencies
+fut2_1kg = fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_snps_af__1kgg.txt", header = T, skip = 256) %>% 
+  mutate_at(vars("global", "ACB", "ASW", "BEB", "CDX", "CEU", "CHB", "CHS", "CLM", "ESN", "FIN", "GBR", "GIH", "GWD", "IBS", "ITU",  "JPT", "KHV", "LWK", "MSL", "MXL", "PEL", "PJL", "PUR", "STU", "TSI", "YRI"), ~as.numeric(str_split(., ":", n=3, simplify = T)[,2])/as.numeric(str_split(., ":", n=3, simplify = T)[,1])) %>% 
+  separate(INFO, into = c("AA", "AC", "AF", "AFR_AF", "AMR_AF", "AN", "DP", "EAS_AF", "EUR_AF", "EX_TARGET", "NS", "SAS_AF", "SF", "VT"), sep =  ";") %>% mutate_at(vars(AFR_AF), ~str_remove_all(.,"AFR_AF=")) %>% 
+  dplyr::select(c("ID", "REF", "ALT", "AF", "AFR_AF", "AMR_AF", "EAS_AF", "EUR_AF", "SAS_AF", "global", "ACB", "ASW", "ESN", "GWD", "LWK", "MSL", "YRI"))
+
+##fut2 ensemble consequence information and detailed annotation
+fut2_ensemble_snps = fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_snps_ensembl.txt", header = T) %>% 
+  distinct(`#Uploaded_variation`, .keep_all=T) %>% 
+  dplyr::select("#Uploaded_variation", "Allele", "Consequence", "IMPACT","Protein_position", "Amino_acids", "SIFT", "PolyPhen", "AF", "CLIN_SIG")
+
+##Merging all the above information (NCBI rsid,erythrogene allele info, 1kg allele frequencies, ensemble annotation) into one table
+kbc_cds_pos = t(snp_t) %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "cds_pos") %>% 
+  right_join(fut2_ld_to_rs601338 %>% dplyr::select(cds_pos, `R^2`, `P-value`),., by = "cds_pos") %>% 
+  right_join(fut2_hwe,., by = "cds_pos") %>%  
+  mutate_at(vars(cds_pos), ~str_remove(.,"V")) %>% 
+  mutate(chr_pos = as.numeric(cds_pos)+48702956) %>% 
+  dplyr::select(cds_pos,chr_pos,`R^2`, `P-value`, p.value) %>% 
+  right_join(fut2_allele_freqs,., by = "cds_pos") %>% 
+  right_join(fut2_erythrogene,., by=c("pos" = "cds_pos")) %>% 
+  right_join(fut2_cds_snps,., by=c("POS"="chr_pos")) %>% 
+  right_join(fut2_1kg,., by = "ID") %>% 
+  right_join(fut2_ensemble_snps,., by = (c("#Uploaded_variation" = "ID")))  %>% 
+  dplyr::select(c("#Uploaded_variation","Allele.y", "REF.x", "ALT.x", "major_allele", "minor_allele", "Nucleotide Change", "Predicted Amino Acid Change", "1000G", "cds_in_allele", "pos",  "Consequence", "IMPACT", "Protein_position", "Amino_acids", "SIFT", "PolyPhen", "AFR_AF", "AMR_AF", "EAS_AF", "EUR_AF", "SAS_AF", "global", "major_af", "minor_af", "ACB", "ASW", "ESN", "GWD", "LWK", "MSL", "YRI","R^2", "P-value", "p.value")) 
+
+##Creating a display table for FUT2 SNPs summary info
+kbc_cds_pos_summ = kbc_cds_pos  %>% 
+  mutate(major_allele_2 = case_when(!is.na(REF.x) & as.character(major_allele) != REF.x ~ as.character(minor_allele), TRUE ~ as.character(major_allele)), 
+         minor_allele_2 = case_when(!is.na(REF.x) & as.character(major_allele) != REF.x ~ as.character(major_allele), TRUE ~ as.character(minor_allele)), 
+         major_af_2 = case_when(!is.na(REF.x) & as.character(major_allele) != REF.x ~ as.character(minor_af), TRUE ~ as.character(major_af)), 
+         minor_af_2 = case_when(!is.na(REF.x) & as.character(major_allele) != REF.x ~ as.character(major_af), TRUE ~ as.character(minor_af))) %>% 
+  dplyr::select(c("#Uploaded_variation", "pos", "minor_allele_2","Allele.y", "Nucleotide Change", "Consequence", "Amino_acids", "SIFT", "PolyPhen", "AFR_AF", "global", "minor_af_2", "LWK", "R^2", "P-value", "p.value")) %>%
+  mutate_at(vars(`#Uploaded_variation`), ~if_else(is.na(.), 'Missing rsid',.)) %>%
+  mutate_at(vars(LWK, global, minor_af_2, AFR_AF, `R^2`, `P-value`, p.value), ~sprintf('%.3f', as.numeric(.))) %>% 
+  mutate_at(vars(LWK, global, minor_af_2, AFR_AF, `R^2`, `P-value`, p.value), ~if_else(. == 'NA', 'Missing',.)) %>%
+  mutate_at(vars(LWK, global, minor_af_2, AFR_AF, `R^2`, `P-value`, p.value), ~replace(., base::which(. =="0.000"), "<0.001")) %>% 
+  mutate_at(vars(Consequence, PolyPhen), ~str_to_sentence(sub("^(\\w+)_(\\w+)", "\\1 \\2", .))) %>% 
+  mutate_at(vars(SIFT, PolyPhen), ~str_to_sentence(sub("(\\.*)\\((\\.*)", "\\1 (\\2", .))) %>% 
+  mutate_at(vars(SIFT), ~str_to_sentence(sub("^(\\w+)_(\\w+)_(\\w+)", "\\1 \\2 \\3", .))) %>% 
+  flextable() %>% 
+  set_header_labels(`#Uploaded_variation` = "SNP", pos = "CDS Position", minor_allele_2 = "Minor Allele", Allele.y = "Erythrogene haplotype", `Nucleotide Change` = "Nucleotide Change", Amino_acids = "Amino acid change", SIFT = "SIFT score", PolyPhen = "PolyPhen score", AFR_AF = "African MAF", global = "Global MAF (N = 2504)", minor_af_2 = "Kilifi MAF (N = 80)", LWK = "Luhya MAF (N = 99)", `R^2` = "LD to rs601338 (r2)", `P-value` = "LD to rs601338 P-value", p.value = "HWE P-value") %>% 
+  padding(padding=0) %>% 
+  set_table_properties(layout = "autofit")  %>% 
+  flextable::fontsize(size = 8, part = "all")%>%
+  border_inner_h(border = fp_border(color="gray70", width = 1), part = "body") %>%
+  bold(i = ~ `P-value` < 0.05, j="P-value", bold = TRUE, part = "body") %>%
+  bold(bold = TRUE, part = "header")#%>%
+# colformat_num(col_keys = c("LWK", "global", "minor_af_2", "AFR_AF"), big.mark = ",", digits = 3, na_str = "missing")
+
+##Flextable landscape page properties 
+ps <- prop_section(page_size = page_size(orient = "landscape"),page_margins = page_mar(left = 0.2, right = 0.2),type = "nextPage")
+
+##Transferring display table above into word document
+read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx") %>% 
+  body_add_par(value = "Table 2:FUT2 CDS variation in the Kilifi population", style = "heading 2") %>% 
+  body_add_flextable(kbc_cds_pos_summ) %>%  
+  body_add_par(value = "Summary statistics of all the single nucleotide polymorphisms (SNPs) found in the coding sequence (CDS) of the FUT2 gene within the Kilifi population. SNPs in linkage disequilibrium (LD) to rs601338 have their LD Pvalue in bold face. The minor allele frequency (MAF) of the SNPs in the Kilifi population is compared to that of Africans, Global and Luyias from Western Kenya (LWK) populations included in the 1000 genomes project", style = "Table Caption") %>% 
+  body_end_block_section(block_section(ps)) %>% 
+  print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx")
+
 ##########################End of Annotation###########################
 
 
@@ -327,7 +421,7 @@ fastaIN_seqs <- fastaIN[,tstrsplit(V3, "")]  #require data.table
 fastaIN_names <- fastaIN[,.(V1)]
 
 #bind the two datasets
-fastaIN <- cbind(fastaIN_names, fastaIN_seqs)
+fastaIN <- base::cbind(fastaIN_names, fastaIN_seqs)
 
 #remame column 1 as it matches column 2
 names(fastaIN)[1] <- c("V0")
@@ -345,7 +439,7 @@ fastaIN_v1 <- as.data.frame(fastaIN[1])
 #keep only columns that represent haplotypes (those that dont match)
 for(colN in 2:dim(fastaIN)[2]) {
   if(all_identical(fastaIN[,colN]) == F) {
-    fastaIN_v1 <- as.data.frame(cbind(fastaIN_v1, fastaIN[colN]))
+    fastaIN_v1 <- as.data.frame(base::cbind(fastaIN_v1, fastaIN[colN]))
   }
 }
 
