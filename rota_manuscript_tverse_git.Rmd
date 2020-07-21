@@ -845,6 +845,8 @@ add_p_footnotes <- function(x) {
     eval()
 }
 
+ps_sum_tbl <- prop_section(page_size = page_size(orient = "portrait"),page_margins = page_mar(left = 0.3, right = 0.3, top = 0.3, bottom = 0.3),type = "nextPage")
+
 
 tbl_cases = rota_geno_pheno_cc %>% 
   filter(cc_status == "All rota cases") %>% 
@@ -894,7 +896,7 @@ read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month projec
   body_add_par(value = "Table 3: Case control participants demographics", style = "heading 2") %>% 
   body_add_flextable(tbl_demog) %>%  
   body_add_par(value = "Tabulation and comparison of cases and controls baseline characteristics and clinical information by secretor status", style = "Table Caption") %>% 
-  body_end_section_continuous() %>% 
+   body_end_block_section(block_section(ps_sum_tbl)) %>% 
   print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx")
 
 # b = rota_geno_pheno_cc %>% 
