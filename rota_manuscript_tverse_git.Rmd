@@ -56,6 +56,9 @@ library(gt)
 library("flextable")
 library(officer)
 library(labelled)
+library(genetics)
+library(htmltools)
+library(webshot)
 
 #########
 conflict_prefer("filter", "dplyr")
@@ -84,6 +87,7 @@ snpid = c("secretor_status")
 sickle_thal = c( "sickle", "thal")
 sickle_thal_q = c( quo(sickle), quo(thal))
 hbga_variants = c("rs601338", "rs8176719", "rs8176746", "rs28362459","rs28362458")
+# cc_title = c("Association between Secretor status and rotavirus strains","Association between ABO and rotavirus strains among Secretors")
 
 ###########################################################
 #Reading in controls
@@ -330,14 +334,39 @@ rota_geno_pheno_cc = rota_geno_pheno_cc %>% mutate(surveillance_year = factor(lu
 cases_for_inc = rota_geno_pheno_cc %>% filter(cc_status == "CASE") %>% dplyr::select(serial) %>% unlist() %>% length()
 controls_for_inc = rota_geno_pheno_cc %>% filter(cc_status == "CONTROL") %>% dplyr::select(serial) %>% unlist() %>% length()
 cases_under6 = rota_geno_pheno_cc %>% filter(cc_status == "CASE" & !is.na(age_years) & age_years<=6) %>% dplyr::select(serial) %>% unlist() %>% length()
+cases_over6 = rota_geno_pheno_cc %>% filter(cc_status == "CASE" & age_years>6) %>% dplyr::select(serial) %>% unlist() %>% length()
 controls_under6 = rota_geno_pheno_cc %>% filter(cc_status == "CONTROL" & !is.na(cc_status)& age_years<=6) %>% dplyr::select(serial) %>% unlist() %>% length()
+controls_no_age = rota_geno_pheno_cc %>% filter(cc_status == "CONTROL" & is.na(age_years)) %>% dplyr::select(serial) %>% unlist() %>% length()
 
 
-
-##ALL THE GENOTYPED CASES ARE IN rota_geno_pheno_cc DATAFRAME UP TO THIS POINT
+##removing those missing age and older than 6 years
 rota_geno_pheno_cc = rota_geno_pheno_cc %>% filter(age_years<=6 & !is.na(age_years))
 
+##counting sicklers
+cases_with_sickle = rota_geno_pheno_cc %>% filter(cc_status == "CASE" & sickle == "SS") %>% dplyr::select(serial) %>% unlist() %>% length()
+cases_no_sickle = rota_geno_pheno_cc %>% filter(cc_status == "CASE" & sickle != "SS") %>% dplyr::select(serial) %>% unlist() %>% length()
 
+controls_with_sickle = rota_geno_pheno_cc %>% filter(cc_status == "CONTROL" & sickle == "SS") %>% dplyr::select(serial) %>% unlist() %>% length()
+controls_no_sickle = rota_geno_pheno_cc %>% filter(cc_status == "CONTROL" & sickle != "SS") %>% dplyr::select(serial) %>% unlist() %>% length()
+
+##removing sicklers
+cases_with_sec = rota_geno_pheno_cc %>% filter(cc_status == "CASE" & !is.na(secretor_status)) %>% dplyr::select(serial) %>% unlist() %>% length()
+cases_no_sec = rota_geno_pheno_cc %>% filter(cc_status == "CASE" & is.na(secretor_status)) %>% dplyr::select(serial) %>% unlist() %>% length()
+
+controls_with_sec = rota_geno_pheno_cc %>% filter(cc_status == "CONTROL" & !is.na(secretor_status)) %>% dplyr::select(serial) %>% unlist() %>% length()
+controls_no_sec = rota_geno_pheno_cc %>% filter(cc_status == "CONTROL" & is.na(secretor_status)) %>% dplyr::select(serial) %>% unlist() %>% length()
+
+##Removing controls with no secretor status
+rota_geno_pheno_cc = rota_geno_pheno_cc %>% filter(!is.na(secretor_status))
+
+cases_with_abo = rota_geno_pheno_cc %>% filter(cc_status == "CASE" & !is.na(phenotypic_bldgrp_6bg_4bg)) %>% dplyr::select(serial) %>% unlist() %>% length()
+cases_no_abo = rota_geno_pheno_cc %>% filter(cc_status == "CASE" & is.na(phenotypic_bldgrp_6bg_4bg)) %>% dplyr::select(serial) %>% unlist() %>% length()
+
+controls_with_abo = rota_geno_pheno_cc %>% filter(cc_status == "CONTROL" & !is.na(phenotypic_bldgrp_6bg_4bg)) %>% dplyr::select(serial) %>% unlist() %>% length()
+controls_no_abo = rota_geno_pheno_cc %>% filter(cc_status == "CONTROL" & is.na(phenotypic_bldgrp_6bg_4bg)) %>% dplyr::select(serial) %>% unlist() %>% length()
+
+##Removing controls with no abo status
+rota_geno_pheno_cc = rota_geno_pheno_cc %>% filter(!is.na(phenotypic_bldgrp_6bg_4bg))
 
 
 ##making p4, p6 and p8 inclusive genotypes
@@ -357,16 +386,7 @@ for (i in 1:length(rota_strain)) {
   rota_geno_pheno_cc[,rota_strain[i]] = factor(ifelse(rota_geno_pheno_cc[,rota_strain[i]] == "0", "0", "1"), labels = c("Controls", rota_strain[i]))
 }
 
-rota_geno_pheno_cc = rota_geno_pheno_cc %>% mutate(lewis_pos = factor(ifelse(rs28362459 == "AA" & rs28362458 == "TT", "Le+", ifelse(rs28362459 == "AC" & rs28362458 == "TT", "Le+", ifelse(rs28362459 == "AA" & rs28362458 == "TC", "Le+", ifelse(rs28362459 == "CC" & rs28362458 == "TC", "Le-" , ifelse(rs28362459 == "AC" & rs28362458 == "CC", "Le-" ,ifelse(rs28362459 == "CC" | rs28362458 == "CC", "Le-" , ifelse(rs28362459 == "AC" & rs28362458 == "TC", "hets", NA ))))))), levels = c("Le+", "Le-", "hets")),lewis_bg = factor(ifelse(lewis_pos == "Le+" & secretor_status == "secretor", "LeB", ifelse(lewis_pos == "Le+" & secretor_status == "nonsecretor", "LeA", ifelse(lewis_pos == "Le-" & secretor_status == "secretor", "Le-_secretor", ifelse(lewis_pos == "Le-" & secretor_status == "nonsecretor", "Le-_nonsecretor", ifelse(lewis_pos == "hets" & secretor_status == "secretor", "Lehet_secretor", ifelse(lewis_pos == "hets" & secretor_status == "nonsecretor", "Lehet_nonsecretor", NA )))))), levels = c("LeB", "LeA", "Le-_secretor" , "Le-_nonsecretor", "Lehet_secretor", "Lehet_nonsecretor")))%>% set_variable_labels(secretor_status = "Secretor status", phenotypic_bldgrp_6bg_4bg = "ABO 4", phenotypic_bldgrp_6bg = "ABO 6", hospitalization_days = "Hospitalization duration (Days)", weight = "Weight (Kg)", diarrhoea = "Diarrhoea", diarrhoea_durn = "Diarrhoea duration (Days)", vomiting = "Vomiting", vomiting_durn = "Vomiting duration", muac = "Mid upper arm circumference (cm)", ethnicity = "Ethnicity", ptype_exc_cln = "Exclusive RV P genotype", pgenotype = "RV P genotype including mixed", shock = "Shock", fever = "Fever (>37.5C)", malaria = "Malaria co-infection", non_OvsO_jcr = "O VS Non-O", age_years = "Age (years)", sex = "Sex", ptype_mx_nt = "Mixed & non-typable P genotypes")
-
-cases_with_sec = rota_geno_pheno_cc %>% filter(cc_status == "All rota cases" & !is.na(secretor_status)) %>% dplyr::select(serial) %>% unlist() %>% length()
-controls_with_sec = rota_geno_pheno_cc %>% filter(cc_status == "Controls" & !is.na(secretor_status)) %>% dplyr::select(serial) %>% unlist() %>% length()
-
-##Removing controls with no secretor or abo status
-rota_geno_pheno_cc = rota_geno_pheno_cc %>% filter(!is.na(secretor_status))
-
-cases_with_abo = rota_geno_pheno_cc %>% filter(cc_status == "All rota cases" & !is.na(phenotypic_bldgrp_6bg_4bg)) %>% dplyr::select(serial) %>% unlist() %>% length()
-controls_with_abo = rota_geno_pheno_cc %>% filter(cc_status == "Controls" & is.na(phenotypic_bldgrp_6bg_4bg)) %>% dplyr::select(serial) %>% unlist() %>% length()
+rota_geno_pheno_cc = rota_geno_pheno_cc %>% mutate(lewis_pos = factor(ifelse(rs28362459 == "AA" & rs28362458 == "TT", "Le+", ifelse(rs28362459 == "AC" & rs28362458 == "TT", "Le+", ifelse(rs28362459 == "AA" & rs28362458 == "TC", "Le+", ifelse(rs28362459 == "CC" & rs28362458 == "TC", "Le-" , ifelse(rs28362459 == "AC" & rs28362458 == "CC", "Le-" ,ifelse(rs28362459 == "CC" | rs28362458 == "CC", "Le-" , ifelse(rs28362459 == "AC" & rs28362458 == "TC", "hets", NA ))))))), levels = c("Le+", "Le-", "hets")),lewis_bg = factor(ifelse(lewis_pos == "Le+" & secretor_status == "secretor", "LeB", ifelse(lewis_pos == "Le+" & secretor_status == "nonsecretor", "LeA", ifelse(lewis_pos == "Le-" & secretor_status == "secretor", "Le-_secretor", ifelse(lewis_pos == "Le-" & secretor_status == "nonsecretor", "Le-_nonsecretor", ifelse(lewis_pos == "hets" & secretor_status == "secretor", "Lehet_secretor", ifelse(lewis_pos == "hets" & secretor_status == "nonsecretor", "Lehet_nonsecretor", NA )))))), levels = c("LeB", "LeA", "Le-_secretor" , "Le-_nonsecretor", "Lehet_secretor", "Lehet_nonsecretor")))%>% set_variable_labels(secretor_status = "Secretor status", phenotypic_bldgrp_6bg_4bg = "ABO 4", phenotypic_bldgrp_6bg = "ABO 6", hospitalization_days = "Hospitalization duration (Days)", weight = "Weight (Kg)", diarrhoea = "Diarrhoea", diarrhoea_durn = "Diarrhoea duration (Days)", vomiting = "Vomiting", vomiting_durn = "Vomiting duration", muac = "Mid upper arm circumference (cm)", ethnicity = "Ethnicity", ptype_exc_cln = "Exclusive RV P genotype", pgenotype = "RV P genotype including mixed", shock = "Shock", fever = "Fever (>37.5C)", malaria = "Malaria co-infection", non_OvsO_jcr = "O VS Non-O", age_years = "Age (years)", sex = "Sex", ptype_mx_nt = "Mixed & non-typable P genotypes", sickle = "Sickle", thal = "Alpha thalassaemia")
 
 
 ##Removing controls with no secretor or abo status
@@ -374,13 +394,236 @@ controls_with_abo = rota_geno_pheno_cc %>% filter(cc_status == "Controls" & is.n
 
 #recording those with rota P genotypes
 cases_with_pg = rota_geno_pheno_cc %>% filter(cc_status == "All rota cases" & !is.na(pgenotype)) %>% dplyr::select(serial) %>% unlist() %>% length()
+cases_no_p = rota_geno_pheno_cc %>% filter(cc_status == "All rota cases" & is.na(pgenotype)) %>% dplyr::select(serial) %>% unlist() %>% length()
+
 cases_with_exc_pg = rota_geno_pheno_cc %>% filter(cc_status == "All rota cases" & !is.na(ptype_exc_cln)) %>% dplyr::select(serial) %>% unlist() %>% length()
+cases_nt_p = rota_geno_pheno_cc %>% filter(cc_status == "All rota cases" & pgenotype == "P[x]") %>% dplyr::select(serial) %>% unlist() %>% length()
+cases_mxd_p = rota_geno_pheno_cc %>% filter(cc_status == "All rota cases" & base::nchar(as.character(pgenotype)) > 4) %>% dplyr::select(serial) %>% unlist() %>% length()
+
+##Removing missing, mixed and non-typable P genotypes
+rota_geno_pheno_cc = rota_geno_pheno_cc %>% filter((cc_status == "Controls") | (cc_status == "All rota cases" & !is.na(ptype_exc_cln)))
+
+##Counting those with P sequence among those with P genotypes
+case_with_ps = rota_geno_pheno_cc %>% filter(cc_status == "All rota cases" & !is.na(psequence)) %>% dplyr::select(serial) %>% unlist() %>% length()
+
 
 
 ##Writing out final dataset
 write.csv(rota_geno_pheno_cc, "C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/Rotavirus cases/processed data/rota_geno_pheno_cc_final.csv", quote = F, row.names = F)
 write.csv(rota_geno_pheno_cc %>% filter(cc_status == "All rota cases"), "C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/Rotavirus cases/processed data/rota_geno_pheno_cc_cases_final_shipped.csv", quote = F, row.names = F)
 
+
+```
+
+
+##FUT2 sequence info
+```{r, echo=F, results= 'asis', warning=F, message=F, eval=F}
+source("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/R.project - SNP Frrequency/scripts - R.functions/function_R - identical_bases_per_locus.R") #checking for polymorphic loci
+source("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/R.project - SNP Frrequency/scripts - R.functions/function_R - snpFreq_per_locus.R") #snp freq per column/locus
+
+#load data
+#skip line 1 as well as empty lines and select colums 1 and 2
+fastaIN <- fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/sequencing results/fut2 phylip from clc/KBC_FUT2_CDS_Consensus_alignment_QCd.phy", skip =1, header = F, blank.lines.skip = T) 
+
+#split sequence column into multiple columns
+fastaIN_seqs <- fastaIN[,tstrsplit(V3, "")]  #require data.table
+
+#select sequence names
+fastaIN_names <- fastaIN[,.(V1)]
+
+#bind the two datasets
+fastaIN <- base::cbind(fastaIN_names, fastaIN_seqs)
+
+#remame column 1 as it matches column 2
+names(fastaIN)[1] <- c("V0")
+
+#convert to data.frame
+fastaIN <- as.data.frame(fastaIN)
+
+#replace all gaps with NA so that these gaps are not evaluated 
+fastaIN[fastaIN == "-"] <- NA
+
+#create new dataframe with just the sequence IDs, to be used in the subsequent loop
+fastaIN_v1 <- as.data.frame(fastaIN[1])
+
+#keep only columns that represent haplotypes (those that dont match)
+for(colN in 2:dim(fastaIN)[2]) {
+  if(all_identical(fastaIN[,colN]) == F) {
+    fastaIN_v1 <- as.data.frame(base::cbind(fastaIN_v1, fastaIN[colN]))
+  }
+}
+
+
+##Checking HWE for all markers
+gtype_object_all <-  fastaIN_v1
+gtype_object_all[,-1] <- as.data.frame(lapply(gtype_object_all[,-1], function(x) ifelse(x == "A", "A/A", ifelse(x == "G", "G/G", ifelse(x == "C", "C/C", ifelse(x == "T", "T/T", ifelse(x == "R", "A/G", ifelse(x == "Y", "C/T", ifelse(x == "S", "G/C", ifelse(x == "W", "A/T", NA))))))))))
+gtype_object_all <- makeGenotypes(gtype_object_all)
+lapply(gtype_object_all[,-1], function(x)HWE.exact(unlist(x)))
+
+##Plotting LD for all the fut2 markers
+genetics::LDplot(genetics::LD(gtype_object_all))
+genetics::LDtable(genetics::LD(gtype_object_all))
+
+#Generating a table of the allele frequencies, hwe and ld to rs601338 for all the fut2 markers
+fut2_allele_freqs = bind_rows(lapply(gtype_object_all[,-1], function(x) c(summary(x)$allele.names, summary(x)$allele.freq[c(3,4)]))) %>% 
+  t() %>% 
+  `colnames<-`(c("major_allele", "minor_allele", "major_af", "minor_af")) %>% 
+  as.data.frame()%>% 
+  rownames_to_column(var = "cds_pos") %>% 
+  mutate_at(vars(cds_pos), ~str_remove(.,"V"))
+
+fut2_hwe = bind_rows(lapply(gtype_object_all[,-1], function(x) HWE.exact(x)[3]), .id = "cds_pos")
+fut2_ld_to_rs601338 = bind_rows(lapply(gtype_object_all[,-1], function(x) genetics::LD(gtype_object_all[,"V461"],x)[2:8]), .id = "cds_pos")
+
+##########################Phylo###########################
+kbc_metadata = read_csv("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/R processed tables/sequenced_ethnicities.csv", na = c("", "<NA>", "NA"))
+
+##Display flextable for KBC participants
+sequencing_participants_dg = kbc_metadata %>% 
+  mutate(sex = case_when(sex == "M" ~ "Male", sex == "F" ~ "Female")) %>% 
+  mutate_at(vars(ethnicity_grouped), str_to_sentence) %>% 
+  dplyr::select(ethnicity_grouped, sex) %>%
+  set_variable_labels(ethnicity_grouped = "Ethnicity", sex = "Sex") %>%
+  tbl_summary(., missing = "ifany") %>% 
+  gtsummary::as_flextable() %>% 
+  padding(padding=0) %>% 
+  set_table_properties(layout = "autofit") %>% 
+  flextable::fontsize(size = 8, part = "all") %>%
+  flextable::border(i = ~ label %in% c("Ethnicity", "Sex"), border.top = fp_border(color="gray70", width = 1), part = "body") %>%
+  bold(i = ~ label %in% c("Ethnicity", "Sex"), j=1, bold = TRUE, part = "body") %>%
+  bold(bold = TRUE, part = "header")
+                    
+
+##Transferring display table to word
+read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>%
+  cursor_reach(keyword = "FUT2 sequencing participants") %>%
+  body_add_flextable(sequencing_participants_dg, pos = "after") %>%  
+  body_add_par(value = "Demographics of individuals included in FUT2 sequencing. In ethnicity, Other includes in Digo, Taita, Kamba, Luo, Arab, Ajuran, Bajun, Luhya, Kikuyu and Rabai", style = "Normal TCaption") %>% 
+  body_end_section_continuous() %>% 
+  print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
+
+kbc_fut2_set <-  fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/sequencing results/fut2 phylip from clc/KBC_FUT2_CDS_Consensus_alignment_QCd.phy", skip =1, header = F, blank.lines.skip = T) %>% dplyr::select(V1, V3) %>% dplyr::rename(V1 = "serial", V3 = "fut2") %>% tibble::deframe()  %>% DNAStringSet()
+kbc_fut2_aln  = msa(kbc_fut2_set)
+# msaPrettyPrint(p_aln, y=c(164, 213), output="asis",showNames="none", showLogo="none", askForOverwrite=FALSE)
+# kbc_fut2_aln_sir <- msaConvert(kbc_fut2_aln, type="seqinr::alignment")
+contrast_fut2 = matrix(data = c(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1, 1,0,1,0, 0,1,0,1, 0,1,1,0, 1,0,0,1),ncol = 4, byrow = TRUE) 
+dimnames(contrast_fut2) = list(c("a","c","g","t","r","y","s","w"), c("a", "c", "g", "t"))
+kbc_fut2_aln_ph <- as.phyDat(kbc_fut2_aln, type="USER", contrast = contrast_fut2)
+mt = modelTest(kbc_fut2_aln_ph)
+kbc_fut2_dist = dist.ml(kbc_fut2_aln_ph)
+kbc_fut2_tree_nj = nj(kbc_fut2_dist)
+fut2_fit <- pml(kbc_fut2_tree_nj, kbc_fut2_aln_ph)
+fut2_fitJC <- optim.pml(fut2_fit, model = "JC", rearrangement = "stochastic")
+fut2_bs <- bootstrap.pml(fut2_fitJC, bs=100, optNni=TRUE, control = pml.control(trace=0))
+kbc_fut2_ggtree = ggtree(fut2_bs)
+kbc_fut2_ggtree = ggtree(as.treedata(fut2_fitJC))
+kbc_fut2_ggtree = ggtree(as.treedata(plotBS(midpoint(fut2_fitJC$tree), fut2_bs, p = 50, type="p")))
+write.tree(plotBS(midpoint(fut2_fitJC$tree), fut2_bs, p = 50, type="p"), file="fut2_bs.tre")
+kbc_fut2_ggtree = ggtree(read.newick("fut2_bs.tre"))
+
+
+
+kbc_fut2_tree_annot = kbc_metadata %>% dplyr::select(serial, ct_ethnic, ethnicity_grouped, final_sickle, final_thall)
+
+kbc_fut2_ggtree_annot = kbc_fut2_ggtree %<+% kbc_fut2_tree_annot 
+
+# kbc_fut2_ggtree_annot + geom_tiplab(aes(linetype=ptype_all_exc)) + geom_tippoint(aes(size=hospitalization_days, shape=secretor_status), alpha=0.25)
+kbc_fut2_ggtree_annot + geom_tippoint(aes(color=ct_ethnic, shape = ethnicity_grouped))
+kbc_fut2_ggtree_annot + geom_tippoint(aes(color=ptype_all_exc, shape = non_OvsO_jcr)) + geom_facet(panel = "dia dur", data = rota_geno_pheno_cc %>% select(serial, diarrhoea_durn, hospitalization_days), geom = ggstance::geom_barh, aes(x = diarrhoea_durn),  stat = "identity", width = .6)+ geom_facet(panel = "Trait", data = rota_geno_pheno_cc %>% select(serial, diarrhoea_durn, diarrhoea_episode), geom = ggstance::geom_barh, aes(x = diarrhoea_episode),  stat = "identity", width = .6)
+
+snp_t = fastaIN_v1 %>% remove_rownames %>% column_to_rownames(var="V0")
+gapChar <- "?"
+lsnp_fut2 <- apply(snp_t, 1, function(x) {
+  x != snp_t[1,] & x != gapChar & snp_t[1,] != gapChar
+})
+lsnp_fut2 <- as.data.frame(lsnp_fut2)
+lsnp_fut2$pos <- as.numeric(rownames(lsnp_fut2))
+lsnp_fut2 <- tidyr::gather(lsnp_fut2, name, value, -pos)
+snp_data_fut2 <- lsnp_fut2[lsnp_fut2$value, c("name", "pos")]
+
+kbc_fut2_ggtree_annot + geom_tippoint(aes(color=ethnicity_grouped)) + geom_facet(panel = "SNP", data = snp_data_fut2, geom = geom_point, mapping=aes(x = pos, color = ethnicity_grouped), shape = '|') 
+
+##########################Phylo###########################
+
+
+##########################Annotation###########################
+
+##NCBI cds snps
+fut2_cds_snps = fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_cds_vcf", header = T) ##%>% mutate(rsid = str_extract(INFO, "rs.+(?=;.+)"))
+
+##Erythrogene alleles
+fut2_erythrogene = read_csv("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_functional_erythrogene.csv")%>% 
+  mutate(allele_cds1 = str_extract_all(`Nucleotide Change`, "[0-9]+", simplify = T)[,1], allele_cds2 = str_extract_all(`Nucleotide Change`, "[0-9]+", simplify = T)[,2], allele_cds3 = str_extract_all(`Nucleotide Change`, "[0-9]+", simplify = T)[,3] ) %>%   
+  mutate_if(is.character, list(~na_if(., ""))) %>% pivot_longer(c(allele_cds1, allele_cds2, allele_cds3), names_to = "cds_in_allele", values_to = "pos", values_drop_na = T) ## %>% 
+# mutate(dup = duplicated(pos)) %>% pivot_wider(., id_cols = pos, names_from = dup, values_from = `Nucleotide Change`)
+
+## removing duplicates from erythrogene
+fut2_erythrogene = fut2_erythrogene %>% 
+  distinct(., pos, .keep_all = T)
+
+##fut2 1kg genotypes and allele frequencies
+fut2_1kg = fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_snps_af__1kgg.txt", header = T, skip = 256) %>% 
+  mutate_at(vars("global", "ACB", "ASW", "BEB", "CDX", "CEU", "CHB", "CHS", "CLM", "ESN", "FIN", "GBR", "GIH", "GWD", "IBS", "ITU",  "JPT", "KHV", "LWK", "MSL", "MXL", "PEL", "PJL", "PUR", "STU", "TSI", "YRI"), ~as.numeric(str_split(., ":", n=3, simplify = T)[,2])/as.numeric(str_split(., ":", n=3, simplify = T)[,1])) %>%
+  separate(INFO, into = c("AA", "AC", "AF", "AFR_AF", "AMR_AF", "AN", "DP", "EAS_AF", "EUR_AF", "EX_TARGET", "NS", "SAS_AF", "SF", "VT"), sep =  ";") %>% mutate_at(vars(AFR_AF), ~str_remove_all(.,"AFR_AF=")) %>% 
+  dplyr::select(c("ID", "REF", "ALT", "AF", "AFR_AF", "AMR_AF", "EAS_AF", "EUR_AF", "SAS_AF", "global", "ACB", "ASW", "ESN", "GWD", "LWK", "MSL", "YRI"))
+
+##fut2 ensemble consequence information and detailed annotation
+fut2_ensemble_snps = fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/fut2_snps/fut2_snps_ensembl.txt", header = T) %>% 
+  distinct(`#Uploaded_variation`, .keep_all=T) %>% 
+  dplyr::select("#Uploaded_variation", "Allele", "Consequence", "IMPACT","Protein_position", "Amino_acids", "SIFT", "PolyPhen", "AF", "CLIN_SIG")
+
+##Merging all the above information (NCBI rsid,erythrogene allele info, 1kg allele frequencies, ensemble annotation) into one table
+kbc_cds_pos = t(snp_t) %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "cds_pos") %>% 
+  right_join(fut2_ld_to_rs601338 %>% dplyr::select(cds_pos, `R^2`, `P-value`),., by = "cds_pos") %>% 
+  right_join(fut2_hwe,., by = "cds_pos") %>%  
+  mutate_at(vars(cds_pos), ~str_remove(.,"V")) %>% 
+  mutate(chr_pos = as.numeric(cds_pos)+48702956) %>% 
+  dplyr::select(cds_pos,chr_pos,`R^2`, `P-value`, p.value) %>% 
+  right_join(fut2_allele_freqs,., by = "cds_pos") %>% 
+  right_join(fut2_erythrogene,., by=c("pos" = "cds_pos")) %>% 
+  right_join(fut2_cds_snps,., by=c("POS"="chr_pos")) %>% 
+  right_join(fut2_1kg,., by = "ID") %>% 
+  right_join(fut2_ensemble_snps,., by = (c("#Uploaded_variation" = "ID")))  %>% 
+  dplyr::select(c("#Uploaded_variation","Allele.y", "REF.x", "ALT.x", "major_allele", "minor_allele", "Nucleotide Change", "Predicted Amino Acid Change", "1000G", "cds_in_allele", "pos",  "Consequence", "IMPACT", "Protein_position", "Amino_acids", "SIFT", "PolyPhen", "AFR_AF", "AMR_AF", "EAS_AF", "EUR_AF", "SAS_AF", "global", "major_af", "minor_af", "ACB", "ASW", "ESN", "GWD", "LWK", "MSL", "YRI","R^2", "P-value", "p.value")) 
+
+##Creating a display table for FUT2 SNPs summary info
+kbc_cds_pos_summ = kbc_cds_pos  %>% 
+  mutate(major_allele_2 = case_when(!is.na(REF.x) & as.character(major_allele) != REF.x ~ as.character(minor_allele), TRUE ~ as.character(major_allele)), 
+         minor_allele_2 = case_when(!is.na(REF.x) & as.character(major_allele) != REF.x ~ as.character(major_allele), TRUE ~ as.character(minor_allele)), 
+         major_af_2 = case_when(!is.na(REF.x) & as.character(major_allele) != REF.x ~ as.character(minor_af), TRUE ~ as.character(major_af)), 
+         minor_af_2 = case_when(!is.na(REF.x) & as.character(major_allele) != REF.x ~ as.character(major_af), TRUE ~ as.character(minor_af))) %>% 
+  dplyr::select(c("#Uploaded_variation", "pos", "minor_allele_2","Allele.y", "Nucleotide Change", "Consequence", "Amino_acids", "SIFT", "PolyPhen", "AFR_AF", "global", "minor_af_2", "LWK", "R^2", "P-value", "p.value")) %>%
+  mutate_at(vars(`#Uploaded_variation`), ~if_else(is.na(.), 'Missing rsid',.)) %>%
+  mutate_at(vars(LWK, global, minor_af_2, AFR_AF, `R^2`, `P-value`, p.value), ~sprintf('%.3f', as.numeric(.))) %>% 
+  mutate_at(vars(LWK, global, minor_af_2, AFR_AF, `R^2`, `P-value`, p.value), ~if_else(. == 'NA', 'Missing',.)) %>%
+  mutate_at(vars(LWK, global, minor_af_2, AFR_AF, `R^2`, `P-value`, p.value), ~replace(., base::which(. =="0.000"), "<0.001")) %>% 
+  mutate_at(vars(Consequence, PolyPhen), ~str_to_sentence(sub("^(\\w+)_(\\w+)", "\\1 \\2", .))) %>% 
+  mutate_at(vars(SIFT, PolyPhen), ~str_to_sentence(sub("(\\.*)\\((\\.*)", "\\1 (\\2", .))) %>% 
+  mutate_at(vars(SIFT), ~str_to_sentence(sub("^(\\w+)_(\\w+)_(\\w+)", "\\1 \\2 \\3", .))) %>% 
+  flextable() %>% 
+  set_header_labels(`#Uploaded_variation` = "SNP", pos = "CDS Position", minor_allele_2 = "Minor Allele", Allele.y = "Erythrogene haplotype", `Nucleotide Change` = "Nucleotide Change", Amino_acids = "Amino acid change", SIFT = "SIFT score", PolyPhen = "PolyPhen score", AFR_AF = "African MAF", global = "Global MAF (N = 2504)", minor_af_2 = "Kilifi MAF (N = 80)", LWK = "Luhya MAF (N = 99)", `R^2` = "LD to rs601338 (r2)", `P-value` = "LD to rs601338 P-value", p.value = "HWE P-value") %>% 
+  padding(padding=0) %>% 
+  set_table_properties(layout = "autofit")  %>% 
+  flextable::fontsize(size = 8, part = "all")%>%
+  border_inner_h(border = fp_border(color="gray70", width = 1), part = "body") %>%
+  bold(i = ~ `P-value` < 0.05, j="P-value", bold = TRUE, part = "body") %>%
+  bold(bold = TRUE, part = "header")#%>%
+# colformat_num(col_keys = c("LWK", "global", "minor_af_2", "AFR_AF"), big.mark = ",", digits = 3, na_str = "missing")
+
+##Flextable landscape page properties 
+ps_kbc <- prop_section(page_size = page_size(orient = "landscape"),page_margins = page_mar(left = 0.1, right = 0.1, top = 0.3, bottom = 0.3),type = "nextPage")
+
+##Transferring display table above into word document
+read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>%
+  cursor_reach(keyword = "Table 2: FUT2 CDS variation in the Kilifi population") %>% 
+  body_add_flextable(kbc_cds_pos_summ) %>%  
+  body_add_par(value = "Summary statistics of all the single nucleotide polymorphisms (SNPs) found in the coding sequence (CDS) of the FUT2 gene within the Kilifi population. SNPs in linkage disequilibrium (LD) to rs601338 have their LD Pvalue in bold face. The minor allele frequency (MAF) of the SNPs in the Kilifi population is compared to that of Africans, Global and Luyias from Western Kenya (LWK) populations included in the 1000 genomes project", style = "Normal TCaption") %>% 
+  body_end_block_section(block_section(ps_kbc)) %>% 
+  print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
+
+##########################End of Annotation###########################
 
 ```
 
@@ -477,12 +720,12 @@ p_ml_tk_ggtree_annot = p_ml_tk_ggtree %<+% p_tk_tree_annot
 
 p_ml_plot = p_ml_tk_ggtree_annot + geom_tippoint(aes(color=ptype_exc_cln, shape = secretor_status)) + geom_cladelabel(node=381, label="Tunisia") + geom_cladelabel(node=308, label="Tunisia") + geom_cladelabel(node=342, label="Tunisia") +  scale_shape_manual(name = "Secretor status", values=c(2,8,1), breaks = c("Missing", "Nonsecretor", "Secretor"), labels = c("Missing", "Non-secretor", "Secretor")) + scale_color_manual(name = "P genotype", values = c("red", "blue","green","grey"), breaks = c("Missing", "P[4]", "P[6]", "P[8]"), labels = c("Missing", "P[4]", "P[6]", "P[8]")) + geom_cladelabel(node=381, label="Tunisia") + geom_cladelabel(node=308, label="Tunisia") + geom_cladelabel(node=342, label="Tunisia")
 
-read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx") %>%  
-  body_add_par(value = "Table 1: FUT2 sequencing participants", style = "heading 2") %>% 
+read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>%  
+  cursor_reach(keyword = "Phylogenetic tree of RVGA P sequences annotated with patient secretor status") %>% 
   body_add_gg(p_ml_plot, width = 6, height = 8, res = 500 ) %>%  
-  body_add_par(value = "Maximum likelihood tree of RVGA P sequences from Kilifi and Tunisian population obtained from Secretors and Non-secretors. Tunisian strains are labelled with the vertical bar and the unlabelled ones are from Kenyan", style = "Table Caption") %>% 
+  body_add_par(value = "Maximum likelihood tree of RVGA P sequences from Kilifi and Tunisian population obtained from Secretors and Non-secretors. Tunisian strains are labelled with the vertical bar and the unlabelled ones are from Kenyan", style = "Normal TCaption") %>% 
   body_end_section_continuous() %>% 
-  print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx")
+  print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
 
 ```
 
@@ -532,105 +775,6 @@ rota_vs_sickle_thal = function(){
   }
 }
 rota_vs_sickle_thal()
-```
-
-
-```{r echo=F, results= 'asis', warning=F, message=F, eval=F}
-##Effect of sickle and thal before removal of sicklers split by surveillance period {.tabset}
-
-panderOptions('knitr.auto.asis', FALSE) 
-panderOptions('table.split.table', Inf)
-panderOptions('evals.messages', FALSE)
-
-rota_vs_sickle_thal_accounting_time = function(surveillance, year_or_period){
-  
-  for (i in 1:length(rota_strain)){
-    cat('###', rota_strain[i], "\n")
-    for (k in 1:length(sickle_thal)){
-      #cat(sickle_thal[k], "\n \n")
-      model_list=list()
-      count_list=list()
-      mal_list=list()
-      
-      for (j in 1:length(year_or_period)){
-        ##rota strain ~ sickle/thal + ethnicity in all plus those with malaria
-        model_list[[length(model_list)+1]] = glm(as.formula(paste(rota_strain[i], "~",  sickle_thal[k], "+" ,  paste("ethnicity", collapse = "+") )),data = rota_geno_pheno_cc[rota_geno_pheno_cc[, surveillance] == year_or_period[j] | rota_geno_pheno_cc[, "cc_status"] == "Controls",] , family = "binomial")
-        ##counting those all including those with malaria
-        count_list[[length(count_list)+1]] = rota_geno_pheno_cc[rota_geno_pheno_cc[, surveillance] == year_or_period[j] | rota_geno_pheno_cc[, "cc_status"] == "Controls",] %>% filter(!is.na(ethnicity) & !is.na(!!rota_strain_q[[i]]) & !is.na(!!sickle_thal_q[[k]]))  %>% dplyr::count(!!rota_strain_q[[i]], !!sickle_thal_q[[k]]) %>% mutate(id=row_number())
-        
-        ##rota strain ~ sickle/thal + ethnicity in those without malaria
-        model_list[[length(model_list)+1]] = glm(as.formula(paste(rota_strain[i], "~",  sickle_thal[k], "+" ,  paste("ethnicity", collapse = "+") )),data = rota_geno_pheno_cc[(rota_geno_pheno_cc[,"malaria"] !="Malaria"| is.na(rota_geno_pheno_cc[,"malaria"])) & (rota_geno_pheno_cc[, surveillance] == year_or_period[j] | rota_geno_pheno_cc[, "cc_status"] == "Controls"),] , family = "binomial")
-        ##counting those without malaria
-        count_list[[length(count_list)+1]] = rota_geno_pheno_cc[(rota_geno_pheno_cc[,"malaria"] !="Malaria"| is.na(rota_geno_pheno_cc[,"malaria"])) & (rota_geno_pheno_cc[, surveillance] == year_or_period[j] | rota_geno_pheno_cc[, "cc_status"] == "Controls"),] %>% filter(!is.na(ethnicity) & !is.na(!!rota_strain_q[[i]]) & !is.na(!!sickle_thal_q[[k]]))  %>% dplyr::count(!!rota_strain_q[[i]], !!sickle_thal_q[[k]]) %>% mutate(id=row_number())
-        ##counting those with malaria
-        mal_list[[length(mal_list)+1]] = rota_geno_pheno_cc[rota_geno_pheno_cc[,"malaria"] =="Malaria" & rota_geno_pheno_cc[, surveillance] == year_or_period[j],] %>% filter(!is.na(ethnicity) & !is.na(!!rota_strain_q[[i]]) & !is.na(!!sickle_thal_q[[k]]))  %>% dplyr::count(!!rota_strain_q[[i]], !!sickle_thal_q[[k]]) %>% mutate(id=row_number())
-        
-      }
-      
-      cat("\n")    
-      cat(paste("<B><U> ", rota_strain[i], " ~ ",  paste(sickle_thal[k], collapse = " + "), " + " , paste("ethnicity", collapse = " + "), "</U></B> \n \n"))
-      
-      tab_model(model_list, dv.labels = paste(rep(c("Plus mal+ve |", "Minus mal+ve |"), times = length(year_or_period)),rep(year_or_period, times = 1, each = 2)), use.viewer = F, rm.terms = c("Chonyi", "Giriama", "Kauma", "Other"), collapse.ci = TRUE, show.reflvl = TRUE)  %>% return() %$% knitr %>% pander()
-      cat("\n \n \n \n")
-      #pander(full_join(unlist(count_list), by = "id"))
-      
-      cat("<B><U> Counts of all rotavirus-infected individuals in the model </U></B> \n \n")
-      pander(setNames(subset(Reduce(function(x, y, ...) merge(x, y, all = TRUE, by = "id", ...),  count_list), select=-id), c(paste(rep(c("Including malaria -", "Minus malaria -"), times = length(year_or_period), each = 3),rep(year_or_period, times = 1, each = 6)))))
-      cat("\n \n \n \n")
-      
-      cat("<B><U> Counts of individuals co-infected with rotavirus & malaria in the model </U></B>  \n \n")
-      pander(setNames(subset(Reduce(function(x, y, ...) merge(x, y, all = TRUE, by = "id", ...),  mal_list), select=-id), c(rep(year_or_period, times = 1, each = 3))))
-      cat("\n \n \n \n")
-      
-    }
-    
-    model_list=list()
-    count_list=list()
-    mal_list=list()
-    
-    for (j in 1:length(year_or_period)){
-      
-      ##rota strain ~ sickle + thal + ethnicity in those without malaria
-      model_list[[length(model_list)+1]] = glm(as.formula(paste(rota_strain[i], "~",  paste(sickle_thal, collapse = "+"), "+" ,  paste("ethnicity", collapse = "+") )), data = rota_geno_pheno_cc[rota_geno_pheno_cc[, surveillance] == year_or_period[j] | rota_geno_pheno_cc[, "cc_status"] == "Controls",] , family = "binomial")
-      count_list[[length(count_list)+1]] = rota_geno_pheno_cc[rota_geno_pheno_cc[, surveillance] == year_or_period[j] | rota_geno_pheno_cc[, "cc_status"] == "Controls",] %>% filter(!is.na(ethnicity) & !is.na(!!rota_strain_q[[i]]) & !is.na(!!sickle_thal_q[[1]]) & !is.na(!!sickle_thal_q[[2]]))  %>% dplyr::count(!!rota_strain_q[[i]], !!sickle_thal_q[[1]], !!sickle_thal_q[[2]]) %>% mutate(id=row_number())
-      
-      ##rota strain ~ sickle + thal + ethnicity in those without malaria
-      model_list[[length(model_list)+1]] = glm(as.formula(paste(rota_strain[i], "~",  paste(sickle_thal, collapse = "+"), "+" ,  paste("ethnicity", collapse = "+") )), data = rota_geno_pheno_cc[(rota_geno_pheno_cc[,"malaria"] !="Malaria"| is.na(rota_geno_pheno_cc[,"malaria"])) & (rota_geno_pheno_cc[, surveillance] == year_or_period[j] | rota_geno_pheno_cc[, "cc_status"] == "Controls"),] , family = "binomial")
-      count_list[[length(count_list)+1]] = rota_geno_pheno_cc[(rota_geno_pheno_cc[,"malaria"] !="Malaria"| is.na(rota_geno_pheno_cc[,"malaria"])) & (rota_geno_pheno_cc[, surveillance] == year_or_period[j] | rota_geno_pheno_cc[, "cc_status"] == "Controls"),] %>% filter(!is.na(ethnicity) & !is.na(!!rota_strain_q[[i]]) & !is.na(!!sickle_thal_q[[1]]) & !is.na(!!sickle_thal_q[[2]]))  %>% dplyr::count(!!rota_strain_q[[i]], !!sickle_thal_q[[1]], !!sickle_thal_q[[2]]) %>% mutate(id=row_number())
-      
-      ##counting those with malaria
-      mal_list[[length(mal_list)+1]] = rota_geno_pheno_cc[rota_geno_pheno_cc[,"malaria"] =="Malaria" & rota_geno_pheno_cc[, surveillance] == year_or_period[j],] %>% filter(!is.na(ethnicity) & !is.na(!!rota_strain_q[[i]]) & !is.na(!!sickle_thal_q[[1]]) & !is.na(!!sickle_thal_q[[2]]))  %>% dplyr::count(!!rota_strain_q[[i]], !!sickle_thal_q[[1]], !!sickle_thal_q[[2]]) %>% mutate(id=row_number())
-      
-    }
-    
-    cat("\n")    
-    cat(paste("<B><U> ", rota_strain[i], " ~ ",  paste(sickle_thal[k], collapse = " + "), " + " , paste("ethnicity", collapse = " + "), "</U></B> \n \n"))
-    
-    tab_model(model_list, dv.labels = paste(rep(c("Plus mal+ve | sickle & thal |", "Minus mal+ve | sickle & thal |"), times = length(year_or_period)),rep(year_or_period, times = 1, each = 2)), use.viewer = F, rm.terms = c("Chonyi", "Giriama", "Kauma", "Other"), collapse.ci = TRUE, show.reflvl = TRUE)  %>% return() %$% knitr %>% pander()
-    cat("\n \n \n \n")
-    
-    cat("<B><U> Sickle & thal counts of all cases and controls in the model </U></B> \n \n")
-    pander(setNames(subset(Reduce(function(x, y, ...) merge(x, y, all = TRUE, by = "id", ...),  count_list), select=-id), c(paste(rep(c("Including malaria -", "Minus malaria -"), times = length(year_or_period), each = 4),rep(year_or_period, times = 1, each = 8)))))
-    cat("\n \n \n \n")
-    
-    cat("<B><U> Sickle & thal counts of cases co-infected with rotavirus & malaria in the model </U></B>  \n \n")
-    pander(setNames(subset(Reduce(function(x, y, ...) merge(x, y, all = TRUE, by = "id", ...),  mal_list), select=-id), c(rep(year_or_period, times = 1, each = 3))))
-    cat("\n \n \n \n")
-    
-    cat("\n \n")
-  }
-}
-rota_vs_sickle_thal_accounting_time(surveillance = "surveillance_period", year_or_period = rota_period[1])
-```
-
-
-```{r, echo=F, results= 'asis', warning=F, message=F, eval=F}
-##Effect of sickle and thal before removal of sicklers split by surveillance year {.tabset}
-
-panderOptions('knitr.auto.asis', FALSE) 
-panderOptions('table.split.table', Inf)
-
-rota_vs_sickle_thal_accounting_time(surveillance = "surveillance_year", year_or_period = rota_years[1:3])
 ```
 
 
@@ -748,53 +892,82 @@ rota_vs_sickle_thal_accounting_time(surveillance = "surveillance_period", year_o
 ```
 
 
-```{r, echo=F, results= 'asis', warning=F, message=F, eval=F}
-##Effect of sickle and thal after removal of sicklers split by surveillance year {.tabset}
-
-panderOptions('knitr.auto.asis', FALSE) 
-panderOptions('table.split.table', Inf)
-
-rota_vs_sickle_thal_accounting_time(surveillance = "surveillance_year", year_or_period = rota_years[1:3])
-```
-
 ##Table 1: Comparing 2 surveillance periods {.tabset}
 ```{r, echo=F, results= 'asis', warning=F, message=F}
 panderOptions('knitr.auto.asis', FALSE) 
 panderOptions('table.split.table', Inf)
 
 ## Flowchart of participants
-  inclussion_flowchart = DiagrammeR::grViz("
-  digraph graph2 {
-  
-  graph [layout = dot]
-  
-  # node definitions with substituted label text
-  node [shape = rectangle, width = 4, fillcolor = Biege]
-  a [label = '@@1']
-  b [label = '@@2']
-  c [label = '@@3']
-  d [label = '@@4']
-  e [label = '@@5']
-  
-  a -> b -> c -> d -> e
-  
-  }
-  
-  [1]:  paste0('Participants selected for inclusion (Cases = ', cases_for_inc, ') (Controls = ', controls_for_inc, ')')
-  [2]: paste0('Individuals under 6 years of age (Cases = ', cases_under6, ') (Controls = ', controls_under6, ')')
-  [3]: paste0('Individuals with secretor status (Cases = ', cases_with_sec, ') (Controls = ', controls_with_sec, ')')
-  [3]: paste0('Individuals with abo status (Cases = ', cases_with_abo, ') (Controls = ', controls_with_abo, ')')
-  [4]: paste0('Individuals with P genotypes (Cases = ', cases_with_pg, ')')
-  [5]: paste0('Individuals with exclusive P genotypes and mixed P genotypes (Cases = ', cases_with_exc_pg, ')')
+  inclussion_flowchart = grViz("
+digraph g { 
+
+graph [layout = dot]
+
+node [shape = rectangle, width = 6]
+a1 [style = invis, shape=point, width = 0, group=g1]
+a2 [style = invis, shape=point, width = 0, group=g2]
+a3 [style = invis, shape=point, width = 0, group=g3]
+a4 [style = invis, shape=point, width = 0, group=g4]
+a5 [style = invis, shape=point, width = 0, group=g5]
+a6 [style = invis, shape=point, width = 0, group=g6]
+
+a [label = '@@1']
+B [label = '@@2']
+C [label = '@@3']
+D [label = '@@4']
+E [label = '@@5']
+F [label = '@@6']
+G [label = '@@7']
+H [label = '@@8']
+I [label = '@@9']
+J [label = '@@10']
+K [label = '@@11']
+
+edge [arrowhead='none']
+a->a1
+C->a2
+E->a3
+G->a4
+a4->a6
+a6->a5
+edge [arrowhead='normal']
+a1->B {rank=same B a1}
+a1->C
+a2->D {rank=same D a2}
+a2->E
+a3->F {rank=same F a3}
+a3->G
+a4->H {rank=same H a4}
+a6->I {rank=same I a6}
+a5->J {rank=same J a5}
+a5->K
+}
+  [1]: paste0('Participants selected for inclusion (Cases = ', cases_for_inc, ') (Controls = ', controls_for_inc, ')')
+  [2]: paste0('Cases over 6 years = ', cases_over6, ' ; Control missing age data = ', controls_no_age, '')
+  [3]: paste0('Individuals under 6 years of age (Cases = ', cases_under6, ') (Controls = ', controls_under6, ')')
+  [4]: paste0('Missing Secretor status: (Cases = ', cases_no_sec, ') (Controls = ', controls_no_sec, ')')
+  [5]: paste0('Individuals with Secretor status (Cases = ', cases_with_sec, ') (Controls = ', controls_with_sec, ')')
+  [6]: paste0('Missing ABO (Cases = ', cases_no_abo, ') (Controls = ', controls_no_abo, ')')
+  [7]: paste0('Individuals with ABO status (Cases = ', cases_with_abo, ') (Controls = ', controls_with_abo, ')')
+  [8]: paste0('Missing P genotypes (Cases = ', cases_no_p, ')')
+  [9]: paste0('Mixed P genotypes (Cases = ', cases_mxd_p, ')')
+  [10]: paste0('Non-typable P  (Cases = ', cases_nt_p, ')')
+  [11]: paste0('Cases included = ', cases_with_exc_pg, ' (',case_with_ps,' with P sequences) ; Controls included = ', controls_with_abo, '')
   ")
   
-html_print(inclussion_flowchart) %>% webshot(file = 'C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/inclusion_flow.png', delay = 10,selector = '.html-widget-static-bound')
+html_print(inclussion_flowchart) %>% webshot(file = 'C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/inclusion_flow.png', zoom = 10, delay = 10,selector = '.html-widget-static-bound')
 
-read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx") %>%  
-  body_add_par(value = "Figure 1: Case control participants inclusion flow-chart", style = "heading 2") %>% 
-  body_add_img(src = "C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/inclusion_flow.png", width = 6, height = 3) %>%  
-  body_add_par(value = "Details on elimination of case control into the study", style = "Image Caption") %>% 
-  body_end_section_continuous() %>% print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx")
+
+
+
+read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>%
+  cursor_reach(keyword = "Figure 1: Case control participants inclusion flow-chart") %>%
+  cursor_forward() %>%
+  body_remove() %>%
+  body_remove() %>%
+  body_add_img(src = "C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/inclusion_flow.png", width = 4.5, height = 5.5) %>%  
+  body_add_par(value = "Details on elimination of cases and controls into the study", style = "Normal ICaption") %>% 
+  body_end_section_continuous() %>% print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
 
 
 ##Preparing table 1 split by surveillance period
@@ -804,53 +977,12 @@ summary(tableby(surveillance_year ~ ptype_exc_cln + pgenotype,data = rota_geno_p
 
 summary(tableby(secretor_status ~ hospitalization_days + weight + diarrhoea + diarrhoea_durn + vomiting + vomiting_durn + muac + ethnicity + ptype_exc_cln + non_OvsO_jcr + phenotypic_bldgrp_6bg_4bg + pgenotype + shock + fever + malaria, data = rota_geno_pheno_cc[rota_geno_pheno_cc[,"cc_status"] == "All rota cases",], numeric.stats = c("Nmiss",  "medianq1q3"), cat.stats=c("Nmiss", "countrowpct")), pfootnote = T, digits = 2, digits.pct =2, conf.level = 0.95)
 
-# results_tbl = read_docx()
-
-# this function adds footnotes to each pvalue of the test performed
-add_p_footnotes <- function(x) {
-  # grouping data, one line per type of test performed
-  prep_to_create_code <-
-    x$meta_data %>%
-    dplyr::filter(!is.na(stat_test_lbl) & stat_test_lbl != "") %>%
-    dplyr::select(var_label, stat_test_lbl) %>%
-    dplyr::group_nest(stat_test_lbl)
-  
-  # other calls to apply to x
-  prepping_calls <-
-    list(rlang::expr(modify_footnote(x, p.value ~ NA_character_)), 
-         rlang::expr(gtsummary::as_flextable()))
-  
-  # creating then executing code to add footnotes to each p-value
-  map2(
-    prep_to_create_code$stat_test_lbl, 
-    prep_to_create_code$data, 
-    function(x, y) {
-      rlang::expr(
-        flextable::footnote(
-          # x = !!y,
-          value = as_paragraph(c(!!x)),
-          j = "p.value",
-          i = ~ label %in% !!y$var_label
-          part = "body",
-          inline = T
-          
-        )
-      )
-    }
-  ) %>%
-    # concatenating expressions with %>% between each of them
-    {c(prepping_calls, .)} %>%    
-    purrr::reduce(function(x, y) expr(!!x %>% !!y)) %>%
-    # evaluating expressions
-    eval()
-}
-
-ps_sum_tbl <- prop_section(page_size = page_size(orient = "portrait"),page_margins = page_mar(left = 0.3, right = 0.3, top = 0.3, bottom = 0.3),type = "nextPage")
+ps_sum_tbl <- prop_section(page_size = page_size(orient = "portrait"),page_margins = page_mar(left = 0.2, right = 0.2, top = 0.2, bottom = 0.2),type = "nextPage")
 
 
 tbl_cases = rota_geno_pheno_cc %>% 
   filter(cc_status == "All rota cases") %>% 
-  dplyr::select(age_years, sex, ethnicity, phenotypic_bldgrp_6bg_4bg, ptype_exc_cln, ptype_mx_nt, hospitalization_days, weight, muac, diarrhoea, diarrhoea_durn, vomiting, vomiting_durn, shock, fever, malaria, secretor_status) %>% 
+  dplyr::select(age_years, sex, ethnicity, phenotypic_bldgrp_6bg_4bg, sickle, thal, ptype_exc_cln, hospitalization_days, weight, muac, diarrhoea, diarrhoea_durn, vomiting, vomiting_durn, shock, fever, malaria, secretor_status) %>% 
   tbl_summary(., by = secretor_status, missing = "ifany", type = list(all_dichotomous() ~ "categorical")) %>% 
   add_p(pvalue_fun = function(x) style_pvalue(x, digits = 2)) %>% 
   add_stat_label()%>%
@@ -858,8 +990,8 @@ tbl_cases = rota_geno_pheno_cc %>%
   # add_p_footnotes()
   
 tbl_ctrls = rota_geno_pheno_cc %>% 
-  filter(cc_status == "Controls") %>% 
-  dplyr::select(age_years, sex, ethnicity, phenotypic_bldgrp_6bg_4bg, secretor_status) %>%
+  dplyr::filter(cc_status == "Controls") %>% 
+  dplyr::select(age_years, sex, ethnicity, phenotypic_bldgrp_6bg_4bg, secretor_status, sickle, thal) %>%
   tbl_summary(., by = secretor_status, missing = "ifany") %>% 
   add_p(pvalue_fun = function(x) style_pvalue(x, digits = 2)) %>% 
   add_stat_label()%>%
@@ -870,8 +1002,8 @@ tbl_demog = tbl_merge(list(tbl_cases, tbl_ctrls),tab_spanner = c("Cases", "Contr
   padding(padding=0) %>% 
   set_table_properties(layout = "autofit") %>% 
   flextable::fontsize(size = 8, part = "all") %>% 
-  flextable::border(i = ~ label %in% c("Age (years), median (IQR)", "Sex, n (%)", "Hospitalization duration (Days), median (IQR)", "Weight (Kg), median (IQR)", "Diarrhoea, n (%)", "Diarrhoea duration (Days), median (IQR)", "Vomiting, n (%)", "Vomiting duration, median (IQR)", "Mid upper arm circumference (cm), median (IQR)", "Ethnicity, n (%)", "Exclusive RV P genotype, n (%)", "O VS Non-O, n (%)", "ABO 4, n (%)", "RV P genotype including mixed, n (%)", "Shock, n (%)", "Fever (>37.5C), n (%)", "Malaria co-infection, n (%)", "Mixed & non-typable P genotypes, n (%)"), border.top = fp_border(color="gray70", width = 1), part = "body") %>%
-  bold(i = ~ label %in% c("Age (years), median (IQR)", "Sex, n (%)", "Hospitalization duration (Days), median (IQR)", "Weight (Kg), median (IQR)", "Diarrhoea, n (%)", "Diarrhoea duration (Days), median (IQR)", "Vomiting, n (%)", "Vomiting duration, median (IQR)", "Mid upper arm circumference (cm), median (IQR)", "Ethnicity, n (%)", "Exclusive RV P genotypes, n (%)", "O VS Non-O, n (%)", "ABO 4, n (%)", "RV P genotype including mixed, n (%)", "Shock, n (%)", "Fever (>37.5C), n (%)", "Co-infections, n (%)", "Mixed & non-typable P genotypes, n (%)"), j=1, bold = TRUE, part = "body") %>%
+  flextable::border(i = ~ label %in% c("Age (years), median (IQR)", "Sex, n (%)", "Hospitalization duration (Days), median (IQR)", "Weight (Kg), median (IQR)", "Diarrhoea, n (%)", "Diarrhoea duration (Days), median (IQR)", "Vomiting, n (%)", "Vomiting duration, median (IQR)", "Mid upper arm circumference (cm), median (IQR)", "Ethnicity, n (%)", "Exclusive RV P genotype, n (%)", "O VS Non-O, n (%)", "ABO 4, n (%)", "RV P genotype including mixed, n (%)", "Shock, n (%)", "Fever (>37.5C), n (%)", "Malaria co-infection, n (%)", "Mixed & non-typable P genotypes, n (%)", "Sickle, n (%)", "Alpha thalassaemia, n (%)"), border.top = fp_border(color="gray70", width = 1), part = "body") %>%
+  bold(i = ~ label %in% c("Age (years), median (IQR)", "Sex, n (%)", "Hospitalization duration (Days), median (IQR)", "Weight (Kg), median (IQR)", "Diarrhoea, n (%)", "Diarrhoea duration (Days), median (IQR)", "Vomiting, n (%)", "Vomiting duration, median (IQR)", "Mid upper arm circumference (cm), median (IQR)", "Ethnicity, n (%)", "Exclusive RV P genotypes, n (%)", "O VS Non-O, n (%)", "ABO 4, n (%)", "RV P genotype including mixed, n (%)", "Shock, n (%)", "Fever (>37.5C), n (%)", "Co-infections, n (%)", "Mixed & non-typable P genotypes, n (%)", "Sickle, n (%)", "Alpha thalassaemia, n (%)"), j=1, bold = TRUE, part = "body") %>%
   bold(bold = TRUE, part = "header")
   
 # a = rota_geno_pheno_cc %>% 
@@ -892,12 +1024,12 @@ tbl_demog = tbl_merge(list(tbl_cases, tbl_ctrls),tab_spanner = c("Cases", "Contr
 #   set_table_properties(layout = "autofit") %>% 
 #   flextable::fontsize(size = 8, part = "all") 
 
-read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx") %>% 
-  body_add_par(value = "Table 3: Case control participants demographics", style = "heading 2") %>% 
+read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>% 
+  cursor_reach(keyword = "Table 3: Case control participants demographics") %>% 
   body_add_flextable(tbl_demog) %>%  
-  body_add_par(value = "Tabulation and comparison of cases and controls baseline characteristics and clinical information by secretor status", style = "Table Caption") %>% 
+  body_add_par(value = "Tabulation and comparison of cases and controls baseline characteristics and clinical information by secretor status", style = "Normal TCaption") %>% 
    body_end_block_section(block_section(ps_sum_tbl)) %>% 
-  print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx")
+  print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
 
 # b = rota_geno_pheno_cc %>% 
 #   filter(cc_status == "Controls") %>% 
@@ -914,18 +1046,13 @@ read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month projec
 #   bold(bold = TRUE, part = "header")
 #   
 # 
-# read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx") %>% 
+# read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>% 
 #   body_add_par(value = "Table 1", style = "heading 2") %>% 
 #   body_add_flextable(a) %>%  
-#   body_add_par(value = "Table: ", style = "Table Caption") %>% 
+#   body_add_par(value = "Table: ", style = "Normal TCaption") %>% 
 #   body_end_section_continuous() %>% 
-#   print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx")
+#   print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
 
-
-# summary(tableby(interaction(secretor_status, surveillance_period) ~ hospitalization_days + weight + diarrhoea + diarrhoea_durn + vomiting + vomiting_durn + muac + ethnicity + ptype_exc_cln + non_OvsO_jcr + phenotypic_bldgrp_6bg_4bg + pgenotype + shock + fever + malaria, data = rota_geno_pheno_cc[rota_geno_pheno_cc[,"cc_status"] == "All rota cases",], numeric.stats = c("Nmiss", "median", "iqr", "range", "medianmad", "medianq1q3"), cat.stats=c("Nmiss", "countrowpct")), pfootnote = T, digits = 2, digits.pct =2, conf.level = 0.95)
-# summary(tableby(surveillance_year ~ ptype_exc_cln * secretor_status,data = rota_geno_pheno_cc, numeric.stats = c("Nmiss", "median", "iqr", "range", "medianmad", "medianq1q3"), cat.stats=c("Nmiss", "countrowpct")), pfootnote = T, digits = 2, digits.pct =2, conf.level = 0.95)
-
-# summary(tableby(ptype_exc_cln ~ age_years + hospitalization_days + weight + diarrhoea + vomiting + muac + ethnicity + secretor_status + non_OvsO_jcr + phenotypic_bldgrp_6bg_4bg + pgenotype + lewis_bg + lewis_pos ,data = rota_geno_pheno_cc, numeric.stats = c("Nmiss", "median", "iqr", "range", "medianmad", "medianq1q3"), cat.stats=c("Nmiss", "countrowpct")), pfootnote = T, digits = 2, digits.pct =2, conf.level = 0.95)
 ```
 
 ##Effect of secretor status and ABO blood groups without factoring in surveillance period or years {.tabset}
@@ -934,22 +1061,22 @@ read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month projec
 panderOptions('knitr.auto.asis', FALSE) 
 panderOptions('table.split.table', Inf)
 
-ps <- prop_section(page_size = page_size(orient = "landscape"),page_margins = page_mar(left = 0.2, right = 0.2),type = "nextPage")
+ps <- prop_section(page_size = page_size(orient = "landscape"),page_margins = page_mar(left = 0.1, right = 0.1),type = "nextPage")
 
 #within everyone
-snp_log_rgrsn_everyone = function (predctr, predctr_q) {
+snp_log_rgrsn_everyone = function (predctr, predctr_q, cc_title) {
   model_list=list()
   count_list=list()
   mal_list=list()
   
-  for (i in 1:length(rota_strain[c(1,2)])){
+  for (i in 1:length(rota_strain)){
     all_tbl = rota_geno_pheno_cc %>% filter(malaria != "Malaria" | is.na(malaria)) %>% dplyr::select(!!predctr_q,!!rota_strain_q[[i]], "ethnicity")
     
     ##rota strain ~ abo/fut2 + ethnicity in all plus those with malaria
-    model_list[[length(model_list)+1]] = all_tbl%>% dplyr::select(-ethnicity) %>% tbl_summary(., by = rota_strain[c(1,2)][i]) %>% list(., tbl_regression(glm(as.formula(paste(rota_strain[c(1,2)][i], "~",  predctr )), data = all_tbl, family = "binomial"), pvalue_fun = function(x) style_pvalue(x, digits = 2), exponentiate = T)) %>% tbl_merge()
+    model_list[[length(model_list)+1]] = all_tbl%>% dplyr::select(-ethnicity) %>% tbl_summary(., by = rota_strain[i]) %>% list(., tbl_regression(glm(as.formula(paste(rota_strain[i], "~",  predctr )), data = all_tbl, family = "binomial"), pvalue_fun = function(x) style_pvalue(x, digits = 2), exponentiate = T) %>%  bold_p()) %>% tbl_merge()
     
     ##Adjusted
-    model_list[[length(model_list)+1]] = all_tbl%>% filter(!is.na(ethnicity)) %>% dplyr::select(-ethnicity) %>% tbl_summary(., by = rota_strain[c(1,2)][i]) %>% list(., tbl_regression(glm(as.formula(paste(rota_strain[c(1,2)][i], "~",  predctr, "+" ,  paste("ethnicity", collapse = "+") )), data = all_tbl, family = "binomial"), include = -ethnicity, pvalue_fun = function(x) style_pvalue(x, digits = 2), exponentiate = T)) %>% tbl_merge()
+    model_list[[length(model_list)+1]] = all_tbl%>% filter(!is.na(ethnicity)) %>% dplyr::select(-ethnicity) %>% tbl_summary(., by = rota_strain[i]) %>% list(., tbl_regression(glm(as.formula(paste(rota_strain[i], "~",  predctr, "+" ,  paste("ethnicity", collapse = "+") )), data = all_tbl, family = "binomial"), include = -ethnicity, pvalue_fun = function(x) style_pvalue(x, digits = 2), exponentiate = T) %>%  bold_p()) %>% tbl_merge()
     
   }
   
@@ -963,11 +1090,12 @@ snp_log_rgrsn_everyone = function (predctr, predctr_q) {
   tryCatch({
     cat(paste("<B><U> All rotavirus strains ~ ",  paste(predctr, collapse = " + "), "+" , paste("ethnicity", collapse = " + "), "</U></B> \n \n"))
     
-    a = gtsummary::as_flextable(tbl_merge(model_list, tab_spanner = paste(rep(c("Unadjusted", "Adjusted (ethnicity)"), times = length(rota_strain[c(1,2)])),rep(rota_strain[c(1,2)], times = 1, each = 2))), size = 8) %>%  flextable::fontsize(size = 8, part = "all") %>%
+    a = gtsummary::as_flextable(tbl_merge(model_list, tab_spanner = paste(rep(c("Unadjusted", "Adjusted (ethnicity)"), times = length(rota_strain)),rep(rota_strain, times = 1, each = 2))), size = 7) %>%  flextable::fontsize(size = 7, part = "all") %>%
       padding(padding=0) %>%
       set_table_properties(layout = "autofit")
     
-    read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx") %>% body_add_par(value = predctr, style = "heading 2") %>% body_add_flextable(a) %>%  body_add_par(value = "Table 1: ", style = "Table Caption") %>% body_end_block_section(block_section(ps)) %>% print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx")   
+    read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>% 
+      cursor_reach(keyword = cc_title) %>% body_add_flextable(a) %>%  body_add_par(value = "Table 1: ", style = "Normal TCaption") %>% body_end_block_section(block_section(ps)) %>% print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")   
     a
   }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
   
@@ -981,7 +1109,7 @@ snp_log_rgrsn_everyone = function (predctr, predctr_q) {
 
 cat("\n \n")
 cat("###secretor status \n") 
-snp_log_rgrsn_everyone(predctr = "secretor_status", predctr_q = quo(secretor_status))
+snp_log_rgrsn_everyone(predctr = "secretor_status", predctr_q = quo(secretor_status), cc_title = "Association between Secretor status and rotavirus strains")
 cat("\n \n")
 
 ```
@@ -994,7 +1122,7 @@ panderOptions('table.split.table', Inf)
 
 
 #within everyone
-snp_log_rgrsn_secretor = function (predctr, predctr_q) {
+snp_log_rgrsn_secretor = function (predctr, predctr_q, cc_title) {
   model_list=list()
   count_list=list()
   mal_list=list()
@@ -1025,7 +1153,11 @@ snp_log_rgrsn_secretor = function (predctr, predctr_q) {
       padding(padding=0) %>%
       set_table_properties(layout = "autofit")
     
-    read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx") %>% body_add_par(value = predctr, style = "heading 2") %>% body_add_flextable(a) %>%  body_add_par(value = "Table 1: ", style = "Table Caption") %>% body_end_block_section(block_section(ps)) %>% print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx")
+    read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>% 
+      cursor_reach(keyword = cc_title) %>% 
+      body_add_flextable(a) %>%  
+      body_add_par(value = "Table 1: ", style = "Normal TCaption") %>% 
+      body_end_block_section(block_section(ps)) %>% print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
     
     a
   }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
@@ -1036,12 +1168,12 @@ snp_log_rgrsn_secretor = function (predctr, predctr_q) {
 
 cat("\n \n")
 cat("###4 ABO groups\n")
-snp_log_rgrsn_secretor(predctr = "phenotypic_bldgrp_6bg_4bg", predctr_q = quo(phenotypic_bldgrp_6bg_4bg))
+snp_log_rgrsn_secretor(predctr = "phenotypic_bldgrp_6bg_4bg", predctr_q = quo(phenotypic_bldgrp_6bg_4bg), cc_title = "Association between 4 ABO groups and rotavirus strains among Secretors")
 cat("\n \n")
 
 cat("\n \n")
 cat("###6 ABO groups\n")
-snp_log_rgrsn_secretor(predctr = "phenotypic_bldgrp_6bg", predctr_q = quo(phenotypic_bldgrp_6bg))
+snp_log_rgrsn_secretor(predctr = "phenotypic_bldgrp_6bg", predctr_q = quo(phenotypic_bldgrp_6bg), cc_title = "Association between 6 ABO groups and rotavirus strains among Secretors")
 cat("\n \n")
 
 ```
