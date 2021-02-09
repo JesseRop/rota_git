@@ -118,7 +118,7 @@ sequencing_participants_dg = kbc_metadata %>%
   set_table_properties(layout = "autofit") %>% 
   flextable::fontsize(size = 8, part = "all") %>%
   flextable::border(i = ~ label %in% c("Ethnicity", "Sex"), border.top = fp_border(color="gray70", width = 1), part = "body") %>%
-  bold(i = ~ label %in% c("Ethnicity", "Sex"), j=1, bold = TRUE, part = "body")) %>%
+  bold(i = ~ label %in% c("Ethnicity", "Sex"), j=1, bold = TRUE, part = "body") %>%
   bold(bold = TRUE, part = "header")
                     
 
@@ -241,14 +241,14 @@ kbc_cds_pos_summ = kbc_cds_pos  %>%
 # colformat_num(col_keys = c("LWK", "global", "minor_af_2", "AFR_AF"), big.mark = ",", digits = 3, na_str = "missing")
 
 ##Flextable landscape page properties 
-ps <- prop_section(page_size = page_size(orient = "landscape"),page_margins = page_mar(left = 0.2, right = 0.2),type = "nextPage")
+ps_kbc <- prop_section(page_size = page_size(orient = "landscape"),page_margins = page_mar(left = 0.1, right = 0.1, top = 0.3, bottom = 0.3),type = "nextPage")
 
 ##Transferring display table above into word document
 read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx") %>% 
-  body_add_par(value = "Table 2:FUT2 CDS variation in the Kilifi population", style = "heading 2") %>% 
+  body_add_par(value = "Table 2: FUT2 CDS variation in the Kilifi population", style = "heading 2") %>% 
   body_add_flextable(kbc_cds_pos_summ) %>%  
   body_add_par(value = "Summary statistics of all the single nucleotide polymorphisms (SNPs) found in the coding sequence (CDS) of the FUT2 gene within the Kilifi population. SNPs in linkage disequilibrium (LD) to rs601338 have their LD Pvalue in bold face. The minor allele frequency (MAF) of the SNPs in the Kilifi population is compared to that of Africans, Global and Luyias from Western Kenya (LWK) populations included in the 1000 genomes project", style = "Table Caption") %>% 
-  body_end_block_section(block_section(ps)) %>% 
+  body_end_block_section(block_section(ps_kbc)) %>% 
   print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rota_figures_and_tables.docx")
 
 ##########################End of Annotation###########################
