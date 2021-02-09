@@ -5,7 +5,6 @@ date: "October 30, 2019"
 output: 
   html_document:
     theme: default
-    highlight: zenburn
     toc: true
     toc_depth: 3
     toc_float: false
@@ -59,6 +58,7 @@ library(labelled)
 library(genetics)
 library(htmltools)
 library(webshot)
+library(DiagrammeR)
 
 #########
 conflict_prefer("filter", "dplyr")
@@ -328,7 +328,11 @@ rota_geno_pheno_cc = rota_geno_pheno_cc %>% mutate(secretor_status = factor(ifel
 
 
 ##Classifying individuals into surveillance years and periods and calculating age and duration of admission
-rota_geno_pheno_cc = rota_geno_pheno_cc %>% mutate(surveillance_year = factor(lubridate::year(rota_geno_pheno_cc$admission_date)),age_years = as.numeric(as.duration(interval(dob, admission_date)), "years"),age_months = as.numeric(as.duration(interval(dob, admission_date)), "months"),hospitalization_days = as.numeric(as.duration(interval(admission_date, discharge_date)), "days"))
+rota_geno_pheno_cc = rota_geno_pheno_cc %>% 
+  mutate(surveillance_year = factor(lubridate::year(admission_date)),
+         age_years = as.numeric(as.duration(interval(dob, admission_date)), "years"),
+         age_months = as.numeric(as.duration(interval(dob, admission_date)), "months"),
+         hospitalization_days = as.numeric(as.duration(interval(admission_date, discharge_date)), "days"))
 
 #Recording individuals before removing them
 cases_for_inc = rota_geno_pheno_cc %>% filter(cc_status == "CASE") %>% dplyr::select(serial) %>% unlist() %>% length()
@@ -417,7 +421,10 @@ write.csv(rota_geno_pheno_cc %>% filter(cc_status == "All rota cases"), "C:/User
 
 
 ##FUT2 sequence info
-```{r, echo=F, results= 'asis', warning=F, message=F, eval=F}
+```{r, results= 'asis', warning=F, message=F}
+panderOptions('knitr.auto.asis', FALSE) 
+panderOptions('table.split.table', Inf)
+
 source("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/R.project - SNP Frrequency/scripts - R.functions/function_R - identical_bases_per_locus.R") #checking for polymorphic loci
 source("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/R.project - SNP Frrequency/scripts - R.functions/function_R - snpFreq_per_locus.R") #snp freq per column/locus
 
@@ -475,7 +482,7 @@ fut2_allele_freqs = bind_rows(lapply(gtype_object_all[,-1], function(x) c(summar
 fut2_hwe = bind_rows(lapply(gtype_object_all[,-1], function(x) HWE.exact(x)[3]), .id = "cds_pos")
 fut2_ld_to_rs601338 = bind_rows(lapply(gtype_object_all[,-1], function(x) genetics::LD(gtype_object_all[,"V461"],x)[2:8]), .id = "cds_pos")
 
-##########################Phylo###########################
+
 kbc_metadata = read_csv("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/R processed tables/sequenced_ethnicities.csv", na = c("", "<NA>", "NA"))
 
 ##Display flextable for KBC participants
@@ -493,16 +500,20 @@ sequencing_participants_dg = kbc_metadata %>%
   bold(i = ~ label %in% c("Ethnicity", "Sex"), j=1, bold = TRUE, part = "body") %>%
   bold(bold = TRUE, part = "header")
                     
-
+knit_print(sequencing_participants_dg)
 ##Transferring display table to word
+
+read_docx() %>% print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
 read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>%
-  cursor_reach(keyword = "FUT2 sequencing participants") %>%
+  body_add_par(value = "FUT2 sequencing participants", style = "table title") %>%
   body_add_flextable(sequencing_participants_dg, pos = "after") %>%  
-  body_add_par(value = "Demographics of individuals included in FUT2 sequencing. In ethnicity, Other includes in Digo, Taita, Kamba, Luo, Arab, Ajuran, Bajun, Luhya, Kikuyu and Rabai", style = "Normal TCaption") %>% 
+  body_add_par(value = "Demographics of individuals included in FUT2 sequencing. In ethnicity, Other includes in Digo, Taita, Kamba, Luo, Arab, Ajuran, Bajun, Luhya, Kikuyu and Rabai", style = "Table Caption") %>% 
   body_end_section_continuous() %>% 
   print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
 
-kbc_fut2_set <-  fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/sequencing results/fut2 phylip from clc/KBC_FUT2_CDS_Consensus_alignment_QCd.phy", skip =1, header = F, blank.lines.skip = T) %>% dplyr::select(V1, V3) %>% dplyr::rename(V1 = "serial", V3 = "fut2") %>% tibble::deframe()  %>% DNAStringSet()
+kbc_fut2_set <-  fread("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/KBC RSV household/lab work/SEQUENCING/sequencing results/fut2 phylip from clc/KBC_FUT2_CDS_Consensus_alignment_QCd.phy", skip =1, header = F, blank.lines.skip = T) %>% dplyr::select(V1, V3) %>% dplyr::rename("serial"="V1", "fut2" = "V3") %>% tibble::deframe()  %>% DNAStringSet()
+
+##########################Phylo###########################
 kbc_fut2_aln  = msa(kbc_fut2_set)
 # msaPrettyPrint(p_aln, y=c(164, 213), output="asis",showNames="none", showLogo="none", askForOverwrite=FALSE)
 # kbc_fut2_aln_sir <- msaConvert(kbc_fut2_aln, type="seqinr::alignment")
@@ -528,8 +539,8 @@ kbc_fut2_tree_annot = kbc_metadata %>% dplyr::select(serial, ct_ethnic, ethnicit
 kbc_fut2_ggtree_annot = kbc_fut2_ggtree %<+% kbc_fut2_tree_annot 
 
 # kbc_fut2_ggtree_annot + geom_tiplab(aes(linetype=ptype_all_exc)) + geom_tippoint(aes(size=hospitalization_days, shape=secretor_status), alpha=0.25)
-kbc_fut2_ggtree_annot + geom_tippoint(aes(color=ct_ethnic, shape = ethnicity_grouped))
-kbc_fut2_ggtree_annot + geom_tippoint(aes(color=ptype_all_exc, shape = non_OvsO_jcr)) + geom_facet(panel = "dia dur", data = rota_geno_pheno_cc %>% select(serial, diarrhoea_durn, hospitalization_days), geom = ggstance::geom_barh, aes(x = diarrhoea_durn),  stat = "identity", width = .6)+ geom_facet(panel = "Trait", data = rota_geno_pheno_cc %>% select(serial, diarrhoea_durn, diarrhoea_episode), geom = ggstance::geom_barh, aes(x = diarrhoea_episode),  stat = "identity", width = .6)
+#kbc_fut2_ggtree_annot + geom_tippoint(aes(color=ct_ethnic, shape = ethnicity_grouped))
+#kbc_fut2_ggtree_annot + geom_tippoint(aes(color=ptype_all_exc, shape = non_OvsO_jcr)) + geom_facet(panel = "dia dur", data = rota_geno_pheno_cc %>% dplyr::select(serial, diarrhoea_durn, hospitalization_days), geom = ggstance::geom_barh, aes(x = diarrhoea_durn),  stat = "identity", width = .6)+ geom_facet(panel = "Trait", data = rota_geno_pheno_cc %>% dplyr::select(serial, diarrhoea_durn, diarrhoea_episode), geom = ggstance::geom_barh, aes(x = diarrhoea_episode),  stat = "identity", width = .6)
 
 snp_t = fastaIN_v1 %>% remove_rownames %>% column_to_rownames(var="V0")
 gapChar <- "?"
@@ -614,12 +625,12 @@ kbc_cds_pos_summ = kbc_cds_pos  %>%
 
 ##Flextable landscape page properties 
 ps_kbc <- prop_section(page_size = page_size(orient = "landscape"),page_margins = page_mar(left = 0.1, right = 0.1, top = 0.3, bottom = 0.3),type = "nextPage")
-
+knit_print(kbc_cds_pos_summ)
 ##Transferring display table above into word document
 read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>%
-  cursor_reach(keyword = "Table 2: FUT2 CDS variation in the Kilifi population") %>% 
+  body_add_par(value = "Table 2: FUT2 CDS variation in the Kilifi population", style = "table title") %>% 
   body_add_flextable(kbc_cds_pos_summ) %>%  
-  body_add_par(value = "Summary statistics of all the single nucleotide polymorphisms (SNPs) found in the coding sequence (CDS) of the FUT2 gene within the Kilifi population. SNPs in linkage disequilibrium (LD) to rs601338 have their LD Pvalue in bold face. The minor allele frequency (MAF) of the SNPs in the Kilifi population is compared to that of Africans, Global and Luyias from Western Kenya (LWK) populations included in the 1000 genomes project", style = "Normal TCaption") %>% 
+  body_add_par(value = "Summary statistics of all the single nucleotide polymorphisms (SNPs) found in the coding sequence (CDS) of the FUT2 gene within the Kilifi population. SNPs in linkage disequilibrium (LD) to rs601338 have their LD Pvalue in bold face. The minor allele frequency (MAF) of the SNPs in the Kilifi population is compared to that of Africans, Global and Luyias from Western Kenya (LWK) populations included in the 1000 genomes project", style = "Table Caption") %>% 
   body_end_block_section(block_section(ps_kbc)) %>% 
   print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
 
@@ -628,55 +639,64 @@ read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month projec
 ```
 
 ##Phylogenetic tree for psequences
-```{r, echo=F, results= 'asis', warning=F, message=F, eval=F}
-p_seq_set = rota_geno_pheno_cc %>% filter(!is.na(p_seq_cln)) %>% dplyr::select( serial, p_seq_cln) %>% tibble::deframe()  %>% DNAStringSet()
-p_aln  = msa(p_seq_set)
-# msaPrettyPrint(p_aln, y=c(164, 213), output="asis",showNames="none", showLogo="none", askForOverwrite=FALSE)
-p_aln_sir <- msaConvert(p_aln, type="seqinr::alignment")
-p_dist = dist.alignment(p_aln_sir, "identity")
-p_tree = nj(p_dist)
-p_ggtree = ggtree(p_tree)
-
+```{r, results= 'asis', warning=F, message=F}
+# p_seq_set = rota_geno_pheno_cc %>% filter(!is.na(p_seq_cln)) %>% dplyr::select( serial, p_seq_cln) %>% tibble::deframe()  %>% DNAStringSet()
+# p_aln  = msa(p_seq_set)
+# p_aln_sir <- msaConvert(p_aln, type="seqinr::alignment")
+# p_dist = dist.alignment(p_aln_sir, "identity")
+# p_tree = nj(p_dist)
+# p_ggtree = ggtree(p_tree)
+# 
 p_tree_annot = rota_geno_pheno_cc %>% filter(!is.na(p_seq_cln)) %>% dplyr::select( serial, secretor_status, OvsnonO_secretor_combi, ABO_secretor_combi, ptype_exc_cln, lewis_pos, lewis_bg, phenotypic_bldgrp_6bg_4bg, non_OvsO_jcr)
+# 
+# p_ggtree_annot = p_ggtree %<+% p_tree_annot 
+# 
+# ##Saving RDS to save on computation
+# saveRDS(p_ggtree_annot, "C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/p_ggtree_annot.rds")
+# ##Reading RDS to save on computation
+p_ggtree_annot <- readRDS("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/p_ggtree_annot.rds")
 
-p_ggtree_annot = p_ggtree %<+% p_tree_annot 
-
-# p_ggtree_annot + geom_tiplab(aes(linetype=ptype_exc_cln)) + geom_tippoint(aes(size=hospitalization_days, shape=secretor_status), alpha=0.25)
-p_ggtree_annot + geom_tippoint(aes(color=ptype_exc_cln), alpha=0.1)
-p_ggtree_annot + geom_tippoint(aes(color=ptype_exc_cln, shape = non_OvsO_jcr)) + geom_facet(panel = "dia dur", data = rota_geno_pheno_cc %>% dplyr::select(serial, diarrhoea_durn, hospitalization_days), geom = ggstance::geom_barh, aes(x = diarrhoea_durn),  stat = "identity", width = .6)+ geom_facet(panel = "Trait", data = rota_geno_pheno_cc %>% dplyr::select(serial, diarrhoea_durn, diarrhoea_episode), geom = ggstance::geom_barh, aes(x = diarrhoea_episode),  stat = "identity", width = .6)
-
-tunisia_pendu = read.GenBank(access.nb = paste("MN",836721:836783, sep = ""))
-mj_wo = read.GenBank(access.nb = paste("MH40",2782:3560, sep = ""))
+p_ggtree_annot + geom_tippoint(aes(color=factor(ptype_exc_cln)), alpha=0.1)
+p_ggtree_annot + geom_tippoint(aes(color=factor(ptype_exc_cln), shape = non_OvsO_jcr)) + geom_facet(panel = "dia dur", data = rota_geno_pheno_cc %>% dplyr::select(serial, diarrhoea_durn, hospitalization_days), geom = ggstance::geom_barh, aes(x = diarrhoea_durn),  stat = "identity", width = .6)+ geom_facet(panel = "Trait", data = rota_geno_pheno_cc %>% dplyr::select(serial, diarrhoea_durn, diarrhoea_episode), geom = ggstance::geom_barh, aes(x = diarrhoea_episode),  stat = "identity", width = .6)
 
 ##Kilifi and Tunisia sequences
 
-
-tunisia_pendu_ds = tunisia_pendu %>% as.character %>% lapply(.,paste0,collapse="") %>% unlist
-p_tns_klf = c(tunisia_pendu_ds, rota_geno_pheno_cc %>% filter(!is.na(p_seq_cln)) %>% dplyr::select( serial, p_seq_cln) %>% tibble::deframe()) %>% DNAStringSet()
-p_tk_aln  = msa(p_tns_klf)
-# msaPrettyPrint(p_tk_aln, y=c(164, 213), output="asis",showNames="none", showLogo="none", askForOverwrite=FALSE)
-p_tk_aln_sir <- msaConvert(p_tk_aln, type="phangorn::phyDat")
-p_tk_dist = dist.ml(p_tk_aln_sir)
-p_tk_tree = upgma(p_tk_dist)
-p_tk_ggtree = ggtree(p_tk_tree)
-
+# tunisia_pendu = read.GenBank(access.nb = paste("MN",836721:836783, sep = ""))
+# #mj_wo = read.GenBank(access.nb = paste("MH40",2782:3560, sep = ""))
+# 
+# tunisia_pendu_ds = tunisia_pendu %>% as.character %>% lapply(.,paste0,collapse="") %>% unlist
+# p_tns_klf = c(tunisia_pendu_ds, rota_geno_pheno_cc %>% filter(!is.na(p_seq_cln)) %>% dplyr::select( serial, p_seq_cln) %>% tibble::deframe()) %>% DNAStringSet()
+# p_tk_aln  = msa(p_tns_klf)
+# p_tk_aln_sir <- msaConvert(p_tk_aln, type="phangorn::phyDat")
+# p_tk_dist = dist.ml(p_tk_aln_sir)
+# p_tk_tree = upgma(p_tk_dist)
+# p_tk_ggtree = ggtree(p_tk_tree)
+# 
 p_tk_tree_annot = read.csv("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/Rotavirus cases/le_pendu_tunisia/serial_numbers_as_accession.csv", na.strings = "?", stringsAsFactors = F) %>% dplyr::select(serial, secretor_status) %>% base::rbind(., p_tree_annot %>% dplyr::select(serial, secretor_status)) %>% mutate(secretor_status = case_when(secretor_status == "Sec" ~ "secretor", secretor_status == "nonsec" ~ "nonsecretor", TRUE ~ secretor_status)) %>% mutate(country = case_when(str_detect(serial,"MN") ~ "Tunisia", TRUE ~ "Kenya")) 
+# 
+# p_tk_ggtree_annot = p_tk_ggtree %<+% p_tk_tree_annot 
+# 
+# ##Saving RDS to save on computation
+# saveRDS(p_tk_ggtree_annot, "C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/p_tk_ggtree_annot.rds")
+##Reading RDS to save on computation
+p_tk_ggtree_annot <- readRDS("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/p_tk_ggtree_annot.rds")
 
-p_tk_ggtree_annot = p_tk_ggtree %<+% p_tk_tree_annot 
-
-# p_tk_ggtree_annot + geom_tiplab(aes(linetype=ptype_exc_cln)) + geom_tippoint(aes(size=hospitalization_days, shape=secretor_status), alpha=0.25)
-p_tk_ggtree_annot + geom_tippoint(aes(color=ptype_exc_cln), alpha=0.1)
-p_tk_ggtree_annot + geom_tippoint(aes(color=non_OvsO_jcr, shape = ptype_exc_cln))
+#p_tk_ggtree_annot + geom_tippoint(aes(color=factor(ptype_exc_cln)), alpha=0.1)
+#p_tk_ggtree_annot + geom_tippoint(aes(color="non_OvsO_jcr", shape = factor(ptype_exc_cln)))
 
 
 ##ML
-p_tk_nj = nj(p_tk_dist)
-p_models = modelTest(p_tk_aln_sir, tree = p_tk_nj)
-p_env = attr(p_models, "env")
-bestmodel <- p_models$Model[which.min(p_models$BIC)]
-p_models[order(p_models$BIC),]
-p_fitStart = eval(get(bestmodel, p_env), p_env)
+#p_tk_nj = nj(p_tk_dist)
+#p_models = modelTest(p_tk_aln_sir, tree = p_tk_nj)
+#p_env = attr(p_models, "env")
+#bestmodel <- p_models$Model[which.min(p_models$BIC)]
+#p_models[order(p_models$BIC),]
+#p_fitStart = eval(get(bestmodel, p_env), p_env)
 #p_fit = optim.pml(p_fitStart, rearrangement = "stochastic",optGamma=TRUE, optInv=TRUE, model="HKY")
+##Saving RDS to save on computation
+#saveRDS(p_fit, "C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/p_fit")
+
+##Reading precomputed file as the processing takes long.
 p_fit = readRDS("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/p_fit")
 #p_bs = bootstrap.pml(p_fit, bs=100, optNni=TRUE)
 p_bs = readRDS("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/p_bs")
@@ -690,12 +710,12 @@ p_ml_tk_ggtree_annot = p_ml_tk_ggtree %<+% p_tk_tree_annot
 # p_tk_ggtree_annot + geom_tippoint(aes(color=ptype_exc_cln), alpha=0.1)
 # p_tk_ggtree_annot + geom_tippoint(aes(color=non_OvsO_jcr, shape = ptype_exc_cln))
 
-p_ml_tk_ggtree_annot + geom_tippoint(aes(color=country, shape = secretor_status, size = ptype_exc_cln))
-p_ml_tk_ggtree_annot + geom_tippoint(aes(color=country, shape = secretor_status)) + geom_nodelab()
+#p_ml_tk_ggtree_annot + geom_tippoint(aes(color=country, shape = secretor_status))
+#p_ml_tk_ggtree_annot + geom_tippoint(aes(color=country, shape = secretor_status)) + geom_nodelab()
 
 ```
 
-```{r, echo=F, results= 'asis', warning=F, message=F}
+```{r, results= 'asis', warning=F, message=F}
 
 p_tree_annot = rota_geno_pheno_cc %>% filter(!is.na(p_seq_cln)) %>% dplyr::select( serial, secretor_status, OvsnonO_secretor_combi, ABO_secretor_combi, ptype_exc_cln, lewis_pos, lewis_bg, phenotypic_bldgrp_6bg_4bg, non_OvsO_jcr)
 
@@ -719,18 +739,19 @@ p_ml_tk_ggtree = ggtree(as.treedata(p_ml_tree))
 p_ml_tk_ggtree_annot = p_ml_tk_ggtree %<+% p_tk_tree_annot 
 
 p_ml_plot = p_ml_tk_ggtree_annot + geom_tippoint(aes(color=ptype_exc_cln, shape = secretor_status)) + geom_cladelabel(node=381, label="Tunisia") + geom_cladelabel(node=308, label="Tunisia") + geom_cladelabel(node=342, label="Tunisia") +  scale_shape_manual(name = "Secretor status", values=c(2,8,1), breaks = c("Missing", "Nonsecretor", "Secretor"), labels = c("Missing", "Non-secretor", "Secretor")) + scale_color_manual(name = "P genotype", values = c("red", "blue","green","grey"), breaks = c("Missing", "P[4]", "P[6]", "P[8]"), labels = c("Missing", "P[4]", "P[6]", "P[8]")) + geom_cladelabel(node=381, label="Tunisia") + geom_cladelabel(node=308, label="Tunisia") + geom_cladelabel(node=342, label="Tunisia")
+p_ml_plot
 
 read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>%  
-  cursor_reach(keyword = "Phylogenetic tree of RVGA P sequences annotated with patient secretor status") %>% 
+  body_add_par(value = "Phylogenetic tree of RVGA P sequences annotated with patient secretor status", style = "graphic title") %>% 
   body_add_gg(p_ml_plot, width = 6, height = 8, res = 500 ) %>%  
-  body_add_par(value = "Maximum likelihood tree of RVGA P sequences from Kilifi and Tunisian population obtained from Secretors and Non-secretors. Tunisian strains are labelled with the vertical bar and the unlabelled ones are from Kenyan", style = "Normal TCaption") %>% 
+  body_add_par(value = "Maximum likelihood tree of RVGA P sequences from Kilifi and Tunisian population obtained from Secretors and Non-secretors. Tunisian strains are labelled with the vertical bar and the unlabelled ones are from Kenyan", style = "Image Caption") %>% 
   body_end_section_continuous() %>% 
   print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
 
 ```
 
 
-```{r, echo=F, results= 'asis', warning=F, message=F, eval=F}
+```{r, results= 'asis', warning=F, message=F}
 ##Effect of sickle and thal before removal of sicklers {.tabset}
 panderOptions('knitr.auto.asis', FALSE) 
 panderOptions('table.split.table', Inf)
@@ -778,7 +799,7 @@ rota_vs_sickle_thal()
 ```
 
 
-```{r further data_preprocessing and tabulation, echo=F, results= 'hide', warning=F}
+```{r further data_preprocessing and tabulation, results= 'hide', warning=F}
 ##HWE and Chisqr tests to ensure data validity
 
 panderOptions('knitr.auto.asis', FALSE) 
@@ -872,7 +893,7 @@ for (i in 1:length(rota_strain)) {
 ```
 
 
-```{r, echo=F, results= 'asis', warning=F, message=F, eval=F}
+```{r, results= 'asis', warning=F, message=F}
 ##Effect of sickle and thal after removal of sicklers {.tabset}
 
 panderOptions('knitr.auto.asis', FALSE) 
@@ -882,7 +903,7 @@ rota_vs_sickle_thal()
 ```
 
 
-```{r echo=F, results= 'asis', warning=F, message=F, eval=F}
+```{r sickl_thal, results= 'asis', warning=F, message=F, eval = F}
 ##Effect of sickle and thal after removal of sicklers split by surveillance period {.tabset}
 
 panderOptions('knitr.auto.asis', FALSE) 
@@ -893,7 +914,7 @@ rota_vs_sickle_thal_accounting_time(surveillance = "surveillance_period", year_o
 
 
 ##Table 1: Comparing 2 surveillance periods {.tabset}
-```{r, echo=F, results= 'asis', warning=F, message=F}
+```{r flowchart , results= 'asis', warning=F, message=F}
 panderOptions('knitr.auto.asis', FALSE) 
 panderOptions('table.split.table', Inf)
 
@@ -961,12 +982,12 @@ html_print(inclussion_flowchart) %>% webshot(file = 'C:/Users/Jesse Rop/OneDrive
 
 
 read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>%
-  cursor_reach(keyword = "Figure 1: Case control participants inclusion flow-chart") %>%
-  cursor_forward() %>%
-  body_remove() %>%
-  body_remove() %>%
+  body_add_par(value = "Figure 1: Case control participants inclusion flow-chart", style = "graphic title") %>%
+  #cursor_forward() %>%
+  #body_remove() %>%
+  #body_remove() %>%
   body_add_img(src = "C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/inclusion_flow.png", width = 4.5, height = 5.5) %>%  
-  body_add_par(value = "Details on elimination of cases and controls into the study", style = "Normal ICaption") %>% 
+  body_add_par(value = "Details on elimination of cases and controls into the study", style = "Image Caption") %>% 
   body_end_section_continuous() %>% print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
 
 
@@ -1023,11 +1044,12 @@ tbl_demog = tbl_merge(list(tbl_cases, tbl_ctrls),tab_spanner = c("Cases", "Contr
 #   padding(padding=0) %>% 
 #   set_table_properties(layout = "autofit") %>% 
 #   flextable::fontsize(size = 8, part = "all") 
+knit_print(tbl_demog)
 
 read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>% 
-  cursor_reach(keyword = "Table 3: Case control participants demographics") %>% 
+  body_add_par(value = "Table 3: Case control participants demographics", style = "table title") %>% 
   body_add_flextable(tbl_demog) %>%  
-  body_add_par(value = "Tabulation and comparison of cases and controls baseline characteristics and clinical information by secretor status", style = "Normal TCaption") %>% 
+  body_add_par(value = "Tabulation and comparison of cases and controls baseline characteristics and clinical information by secretor status", style = "Table Caption") %>% 
    body_end_block_section(block_section(ps_sum_tbl)) %>% 
   print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
 
@@ -1049,7 +1071,7 @@ read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month projec
 # read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>% 
 #   body_add_par(value = "Table 1", style = "heading 2") %>% 
 #   body_add_flextable(a) %>%  
-#   body_add_par(value = "Table: ", style = "Normal TCaption") %>% 
+#   body_add_par(value = "Table: ", style = "Table Caption") %>% 
 #   body_end_section_continuous() %>% 
 #   print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
 
@@ -1057,7 +1079,7 @@ read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month projec
 
 ##Effect of secretor status and ABO blood groups without factoring in surveillance period or years {.tabset}
 
-```{r echo=F, results= 'asis', warning=F, message=F, eval=F}
+```{r assoc, results= 'asis', warning=F, message=F}
 panderOptions('knitr.auto.asis', FALSE) 
 panderOptions('table.split.table', Inf)
 
@@ -1095,8 +1117,8 @@ snp_log_rgrsn_everyone = function (predctr, predctr_q, cc_title) {
       set_table_properties(layout = "autofit")
     
     read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>% 
-      cursor_reach(keyword = cc_title) %>% body_add_flextable(a) %>%  body_add_par(value = "Table 1: ", style = "Normal TCaption") %>% body_end_block_section(block_section(ps)) %>% print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")   
-    a
+      body_add_par(value = cc_title, style = "table title") %>% body_add_flextable(a) %>%  body_add_par(value = "Table 1: ", style = "Table Caption") %>% body_end_block_section(block_section(ps)) %>% print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")   
+    knit_print(a)
   }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
   
   
@@ -1116,7 +1138,7 @@ cat("\n \n")
 
 ##Effect of secretor status and ABO blood groups without factoring in surveillance period or years among secretors {.tabset}
 
-```{r echo=F, results= 'asis', warning=F, message=F}
+```{r assoc2, results= 'asis', warning=F, message=F}
 panderOptions('knitr.auto.asis', FALSE) 
 panderOptions('table.split.table', Inf)
 
@@ -1154,12 +1176,12 @@ snp_log_rgrsn_secretor = function (predctr, predctr_q, cc_title) {
       set_table_properties(layout = "autofit")
     
     read_docx("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx") %>% 
-      cursor_reach(keyword = cc_title) %>% 
+      body_add_par(value = cc_title, style = "table title") %>% 
       body_add_flextable(a) %>%  
-      body_add_par(value = "Table 1: ", style = "Normal TCaption") %>% 
+      body_add_par(value = "Table 1: ", style = "Table Caption") %>% 
       body_end_block_section(block_section(ps)) %>% print("C:/Users/Jesse Rop/OneDrive - Kemri Wellcome Trust/WT 18 month project/JRWT Study data/rotavirus analysis/rotavirus/rotavirus_git/rotavirus_hbga_manuscript.docx")
     
-    a
+    knit_print(a)
   }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
   
   
